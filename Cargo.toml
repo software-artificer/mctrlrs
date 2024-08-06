@@ -1,0 +1,22 @@
+[package]
+name = "mctrlrs"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0"
+actix-files = { version = "0.6", default-features = false, features = [] }
+actix-session = { version = "0.9", default-features = false, features = [] }
+actix-web = { version = "4", default-features = false, features = [] }
+argon2 = { version = "0.5" }
+clap = { version = "4", default-features = false, features = [ "std", "derive", "help", "usage" ] }
+handlebars = { version = "6", features = [ "dir_source" ] }
+secrecy = { version = "0.8", features = [ "serde" ] }
+serde = { version = "1", default-features = false, features = [ "serde_derive" ] }
+rand = { version = "0.8", default-features = false, features = [] }
+thiserror = { version = "1", default-features = false, features = [] }
+tokio = { version = "1", default-features = false, features = [ "rt-multi-thread", "sync" ] }
+serde_yml = { version = "0.0.11", default-features = false, features = [] }
+http-serde = "1"

@@ -1,0 +1,33 @@
+{{#> page}}
+
+{{#*inline "content"}}
+<form method="POST" action="/enroll" id="enroll">
+  <input type="hidden" name="token" value="{{ content.token }}" />
+  <fieldset>
+    <legend>Enroll a new user</legend>
+    <div>
+      <label>
+        <span>Username:</span>
+        <span><input type="text" disabled value="{{ content.username }}"></span>
+      </label>
+    </div>
+    <div>
+      <label>
+        <span>Password:</span>
+        <span><input type="password" name="password" placeholder="Enter your password"></span>
+      </label>
+    </div>
+    <div>
+      <label>
+        <span>Repeat:</span>
+        <span><input type="password" name="repassword" placeholder="Repeat the password"></span>
+      </label>
+    </div>
+    <div class="text-right">
+      <input type="submit" value="Enroll">
+    </div>
+  </fieldset>
+</form>
+{{/inline}}
+
+{{/page}}

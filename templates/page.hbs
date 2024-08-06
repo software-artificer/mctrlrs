@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Minecraft Server Manager</title>
+    <link rel="stylesheet" href="/static/main.css">
+    <link rel="icon" href="/static/favicon.svg">
+  </head>
+  <body>
+    <header>
+      <a href="/" title="Home page" id="logo">
+        <img src="/static/logo.svg" alt="Minecraft Logo">
+        <span>Server Manager</span>
+      </a>
+    </header>
+    <nav>
+    </nav>
+    <ul id="messages">
+      {{#each flash_messages}}
+        <li class="{{ this.level }}">{{ this.message }}</li>
+      {{/each}}
+    </ul>
+    <section id="content">
+      {{> content }}
+    </section>
+    <footer>
+      <p id="version">
+        Minecraft Server Manager v{{ app_version }},
+        powered by <a href="https://actix.rs/" target="_blank" title="Visit Actix Web framework homepage">Actix</a>
+      </p>
+      <p id="copyright">
+        <span class="section">
+          Logo copyright &copy;<a href="https://mojang.com/" title="Mojang Studios" target="_blank">Mojang AB</a>, trade mark of <a href="https://microsoft.com" title="Microsoft Corporation" target="_blank">Microsoft Corporation</a>
+        </span>
+        <span class="section">
+          <a href="https://kottke.org/plus/type/silkscreen/index.html" title="Silkscreen font homepage" target="_blank">Silkscreen font</a> by <a href="mailto:jason@kottke.org" title="Email Jason Kottke, creator of the Silkscreen font">Jason Kottke</a>.
+        </span>
+      </p>
+    </footer>
+  </body>
+</html>
