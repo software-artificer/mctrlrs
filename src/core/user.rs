@@ -175,6 +175,10 @@ impl Users {
             .map(|user| user.username.to_owned())
     }
 
+    pub fn find_user_by_username(&self, username: &Username) -> Option<&User> {
+        self.users.get(&username.0)
+    }
+
     pub fn update_password(
         mut self,
         username: &Username,

@@ -67,7 +67,7 @@ async fn run_server(config: core::Config) -> Result<(), Error> {
             .wrap(middleware::ConditionalMiddleware::new(
                 middleware::AuthMiddleware::<session::UserSession>::new("/login"),
                 |req: &actix_web::dev::ServiceRequest| {
-                    !["/static", "/enroll"]
+                    !["/static", "/enroll", "/login"]
                         .iter()
                         .any(|path| req.path().starts_with(path))
                 },
