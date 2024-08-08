@@ -39,6 +39,12 @@ impl UserSession {
             None => Ok(None),
         }
     }
+
+    pub fn authenticate(&self, user: &core::User) -> Result<(), actix_session::SessionInsertError> {
+        self.session.renew();
+        self.session
+            .insert(Self::USERNAME_KEY, user.username.to_string())
+    }
 }
 
 impl middleware::AuthSession for UserSession {

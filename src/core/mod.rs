@@ -3,5 +3,6 @@ mod user;
 
 pub use config::{AppConfig, Config};
 pub use user::{
-    InvalidUsernameError, ManageUsersError, Password, PasswordError, User, Username, Users,
+    InvalidUsernameError, ManageUsersError, Password, PasswordError, PasswordVerifyResult, User,
+    Username, Users,
 };

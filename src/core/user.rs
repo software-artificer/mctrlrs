@@ -1,5 +1,8 @@
 use crate::core;
-use argon2::password_hash::{self, rand_core::OsRng, PasswordHasher, SaltString};
+use argon2::{
+    password_hash::{self, rand_core::OsRng, PasswordHasher, SaltString},
+    PasswordVerifier,
+};
 use rand::distributions::{self, DistString};
 use secrecy::ExposeSecret;
 use std::{collections, fmt, fs, io, path};
@@ -110,6 +113,33 @@ pub struct User {
     pub username: Username,
     password: Option<secrecy::SecretString>,
     enroll_token: Option<EnrollToken>,
+}
+
+pub enum PasswordVerifyResult {
+    Error(password_hash::Error),
+    Valid,
+    Invalid,
+}
+
+impl User {
+    pub fn verify_password(&self, candidate: String) -> PasswordVerifyResult {
+        match &self.password {
+            Some(password) => match argon2::PasswordHash::new(password.expose_secret()) {
+                Ok(expected_password) => {
+                    if argon2::Argon2::default()
+                        .verify_password(candidate.as_bytes(), &expected_password)
+                        .is_ok()
+                    {
+                        PasswordVerifyResult::Valid
+                    } else {
+                        PasswordVerifyResult::Invalid
+                    }
+                }
+                Err(err) => PasswordVerifyResult::Error(err),
+            },
+            _ => PasswordVerifyResult::Invalid,
+        }
+    }
 }
 
 pub struct Users {
