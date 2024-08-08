@@ -35,7 +35,7 @@ pub async fn get(
 #[derive(serde::Deserialize)]
 pub struct LoginRequest {
     username: String,
-    password: String,
+    password: secrecy::SecretString,
 }
 
 pub async fn post(

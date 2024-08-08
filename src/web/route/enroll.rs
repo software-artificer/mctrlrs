@@ -2,6 +2,7 @@ use crate::web::{
     self as core_web, core, internal_server_error, middleware::AuthSession, session, template,
 };
 use actix_web::web;
+use secrecy::ExposeSecret;
 
 #[derive(serde::Deserialize)]
 pub struct Parameters {
@@ -83,8 +84,8 @@ fn validate_token(config: &core::AppConfig, token: &str) -> TokenState {
 #[derive(serde::Deserialize)]
 pub struct EnrollRequest {
     token: String,
-    password: String,
-    repassword: String,
+    password: secrecy::SecretString,
+    repassword: secrecy::SecretString,
 }
 
 pub async fn post(
@@ -185,10 +186,10 @@ impl From<core::PasswordError> for PasswordError {
 
 fn verify_password(
     config: &core::AppConfig,
-    password: String,
-    repassword: String,
+    password: secrecy::SecretString,
+    repassword: secrecy::SecretString,
 ) -> Result<core::Password, PasswordError> {
-    if password != repassword {
+    if password.expose_secret() != repassword.expose_secret() {
         Err(PasswordError::BadPassword(
             "Passwords do not match. Please try again!".to_string(),
         ))

@@ -122,12 +122,12 @@ pub enum PasswordVerifyResult {
 }
 
 impl User {
-    pub fn verify_password(&self, candidate: String) -> PasswordVerifyResult {
+    pub fn verify_password(&self, candidate: secrecy::SecretString) -> PasswordVerifyResult {
         match &self.password {
             Some(password) => match argon2::PasswordHash::new(password.expose_secret()) {
                 Ok(expected_password) => {
                     if argon2::Argon2::default()
-                        .verify_password(candidate.as_bytes(), &expected_password)
+                        .verify_password(candidate.expose_secret().as_bytes(), &expected_password)
                         .is_ok()
                     {
                         PasswordVerifyResult::Valid
@@ -331,18 +331,22 @@ pub enum PasswordError {
 pub struct Password(secrecy::SecretString);
 
 impl Password {
-    pub fn new(password: String, config: &core::AppConfig) -> Result<Self, PasswordError> {
-        if password.len() < config.min_password_length {
+    pub fn new(
+        password: secrecy::SecretString,
+        config: &core::AppConfig,
+    ) -> Result<Self, PasswordError> {
+        let pass = password.expose_secret();
+        if pass.len() < config.min_password_length {
             Err(PasswordError::Short(config.min_password_length))
-        } else if password.len() > config.max_password_length {
+        } else if pass.len() > config.max_password_length {
             Err(PasswordError::Long(config.max_password_length))
-        } else if !is_strong_password(&password) {
+        } else if !is_strong_password(pass) {
             Err(PasswordError::Weak)
         } else {
             let salt = SaltString::generate(&mut OsRng);
             let argon2 = argon2::Argon2::default();
             let password_hash = argon2
-                .hash_password(password.as_bytes(), &salt)
+                .hash_password(pass.as_bytes(), &salt)
                 .map_err(PasswordError::Hash)?;
 
             Ok(Self(secrecy::Secret::new(password_hash.to_string())))
