@@ -1,0 +1,32 @@
+{{#>page}}
+
+{{#*inline "content"}}
+<form method="post" action="/worlds">
+  <fieldset>
+    <legend>World selector</legend>
+    <label>
+      <span>Current active world:</span>
+      {{#each content}}
+        {{#if this.is_current}}
+          <span><input type="text" disabled value="{{this.name}}"></span>
+        {{/if}}
+      {{/each}}
+    </label>
+    <label>
+      <span>Change active world:</span>
+      <span><select name="world_id">
+        {{#each content}}
+      	  {{#unless this.is_current}}
+            <option value="{{this.id}}">{{this.name}}</option>
+          {{/unless}}
+        {{/each}}
+      </select></span>
+    </label>
+    <div class="text-right">
+      <input type="submit" value="Change">
+    </div>
+  </fieldset>
+</form>
+{{/inline}}
+
+{{/page}}

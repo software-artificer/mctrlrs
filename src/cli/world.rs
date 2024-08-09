@@ -20,7 +20,7 @@ pub fn list(config: core::AppConfig) -> Result<(), Error> {
             print!("  ");
         }
 
-        println!("{}", world.id.display());
+        println!("{}", world.id());
     }
 
     Ok(())
@@ -32,10 +32,7 @@ pub fn switch(config: core::AppConfig, world_name: String) -> Result<(), Error> 
 
     let world = worlds.switch(world_name).map_err(Error::Switch)?;
 
-    println!(
-        "The currently active world was changed to: {}",
-        world.id.display(),
-    );
+    println!("The currently active world was changed to: {}", world.id(),);
 
     Ok(())
 }

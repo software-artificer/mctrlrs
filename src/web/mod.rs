@@ -91,6 +91,8 @@ async fn run_server(config: core::Config) -> Result<(), Error> {
             .route("/login", web::post().to(route::login_post))
             .route("/enroll", web::get().to(route::enroll_get))
             .route("/enroll", web::post().to(route::enroll_post))
+            .route("/worlds", web::get().to(route::worlds_get))
+            .route("/worlds", web::post().to(route::worlds_post))
     })
     .bind(config.listen_on)
     .map_err(|err| Error::BindServer {

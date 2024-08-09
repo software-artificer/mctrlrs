@@ -26,7 +26,7 @@ html {
   font-family: Roboto Mono;
 }
 
-input {
+input, select {
   font-family: Roboto Mono;
   font-size: 1rem;
   padding: 0.2rem 1rem;
@@ -70,6 +70,7 @@ a[target=_blank]::after {
 
 ul#messages {
   margin: 0 auto;
+  padding: 0.5rem 0;
 
   li {
     list-style: none;
@@ -119,6 +120,40 @@ body {
       font-size: 2rem;
       text-decoration: none;
       text-align: center;
+    }
+  }
+
+  nav {
+    ul {
+      display: block;
+      list-style: none;
+      border: 0.1rem solid #87A96B;
+      border-left: none;
+      border-right: none;
+      margin: 0 5rem;
+      text-align: center;
+
+      li {
+        display: inline-block;
+
+        a {
+          display: inline-block;
+          padding: 1rem 2rem;
+          color: #fff;
+          text-decoration: none;
+
+          &:hover, &:focus, &.active {
+            background-color: #87A96B;
+            color: #333;
+          }
+        }
+
+        &.home > a.home,
+        &.worlds > a.worlds {
+            background-color: #87A96B;
+            color: #333;
+        }
+      }
     }
   }
 

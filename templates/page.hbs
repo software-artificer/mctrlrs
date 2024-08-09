@@ -14,6 +14,17 @@
       </a>
     </header>
     <nav>
+      {{#if menu}}
+        <ul>
+          <li class="home">
+            <a href="/" class="{{menu}}">🏠 Home</a>
+          </li><li class="worlds">
+            <a href="/worlds" class="{{menu}}">🪐 Worlds</a>
+          </li><li class="login">
+            <a href="/login" class="{{menu}}">🚪 Logout</a>
+          </li>
+        </ul>
+      {{/if}}
     </nav>
     <ul id="messages">
       {{#each flash_messages}}

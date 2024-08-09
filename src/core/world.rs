@@ -1,9 +1,15 @@
 use std::{fs, io, os::unix::fs as ufs, path};
 
 pub struct World {
-    pub id: path::PathBuf,
+    id: path::PathBuf,
     pub is_active: bool,
     path: path::PathBuf,
+}
+
+impl World {
+    pub fn id(&self) -> String {
+        format!("{}", self.id.display())
+    }
 }
 
 pub struct Worlds {
@@ -74,7 +80,7 @@ impl Worlds {
 pub enum WorldError {
     #[error("Unable to read worlds directory: {}", .0)]
     ReadWorldDir(#[source] io::Error),
-    #[error("No world named `{}`", .0.display())]
+    #[error("No world with id `{}`", .0.display())]
     NoSuchWorld(path::PathBuf),
     #[error("Failed to switch the world: {}", .0)]
     Switch(#[source] io::Error),

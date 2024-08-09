@@ -6,9 +6,33 @@ pub struct Content<C: serde::Serialize> {
     app_version: &'static str,
     content: C,
     flash_messages: Vec<session::FlashMessage>,
+    menu: ActiveMenu,
 }
 
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[derive(Default)]
+pub enum ActiveMenu {
+    #[default]
+    None,
+    Home,
+    Worlds,
+}
+
+impl serde::Serialize for ActiveMenu {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let value = match self {
+            Self::None => "",
+            Self::Home => "home",
+            Self::Worlds => "worlds",
+        };
+
+        String::serialize(&value.to_string(), serializer)
+    }
+}
 
 impl<C: serde::Serialize> Content<C> {
     pub fn new(flash_messages: session::FlashMessages, content: C) -> Self {
@@ -16,6 +40,14 @@ impl<C: serde::Serialize> Content<C> {
             content,
             app_version: APP_VERSION,
             flash_messages: flash_messages.take(),
+            menu: Default::default(),
+        }
+    }
+
+    pub fn with_menu(self, active_item: ActiveMenu) -> Self {
+        Self {
+            menu: active_item,
+            ..self
         }
     }
 }
