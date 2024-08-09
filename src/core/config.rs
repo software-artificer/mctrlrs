@@ -50,8 +50,8 @@ pub enum LoadConfigError {
 pub enum ConfigValidationError {
     #[error("Invalid worlds path: {}", .0)]
     WorldsPath(String),
-    #[error("Invalid current world name: {}", .0)]
-    CurrentWorldName(String),
+    #[error("Invalid current world path: {}", .0)]
+    CurrentWorldPath(String),
     #[error("Invalid server socket path: {}", .0)]
     ServerSocketPath(String),
     #[error("Invalid users file path: {}", .0)]
@@ -77,7 +77,7 @@ pub struct Config {
 
 impl Config {
     pub fn load<P: AsRef<path::Path>>(path: P) -> Result<Self, LoadConfigError> {
-        let path = relative_path_to_absolute(path)?;
+        let path = canonicalize_path(path)?;
         let config_reader =
             fs::File::open(&path).map_err(|source| LoadConfigError::ReadError { path, source })?;
         let config: ConfigFile =
@@ -115,7 +115,7 @@ impl TryFrom<ConfigFile> for Config {
 }
 
 fn resolve_worlds_path(worlds_path: path::PathBuf) -> Result<path::PathBuf, ConfigValidationError> {
-    let worlds_path = relative_path_to_absolute(worlds_path)
+    let worlds_path = canonicalize_path(worlds_path)
         .map_err(|err| ConfigValidationError::WorldsPath(err.to_string()))?;
 
     if !worlds_path.is_dir() {
@@ -131,8 +131,15 @@ fn resolve_worlds_path(worlds_path: path::PathBuf) -> Result<path::PathBuf, Conf
 fn check_current_world_path(
     current_world: path::PathBuf,
 ) -> Result<path::PathBuf, ConfigValidationError> {
+    let current_world = relative_path_to_absolute(&current_world).map_err(|_| {
+        ConfigValidationError::CurrentWorldPath(format!(
+            "No such file: {}",
+            current_world.display()
+        ))
+    })?;
+
     if !current_world.is_symlink() {
-        Err(ConfigValidationError::CurrentWorldName(format!(
+        Err(ConfigValidationError::CurrentWorldPath(format!(
             "`{}` must be a symlink",
             current_world.display(),
         )))
@@ -144,7 +151,7 @@ fn check_current_world_path(
 fn resolve_server_socket_path(
     server_socket_path: path::PathBuf,
 ) -> Result<path::PathBuf, ConfigValidationError> {
-    let server_socket_path = relative_path_to_absolute(server_socket_path)
+    let server_socket_path = canonicalize_path(server_socket_path)
         .map_err(|err| ConfigValidationError::ServerSocketPath(err.to_string()))?;
 
     let fs_metadata = server_socket_path.metadata().map_err(|err| {
@@ -167,7 +174,7 @@ fn resolve_server_socket_path(
 fn resolve_users_file_path(
     users_file: path::PathBuf,
 ) -> Result<path::PathBuf, ConfigValidationError> {
-    let users_file = relative_path_to_absolute(users_file)
+    let users_file = canonicalize_path(users_file)
         .map_err(|err| ConfigValidationError::UsersFilePath(err.to_string()))?;
 
     if !users_file.is_file() {
@@ -188,11 +195,16 @@ fn check_base_url(url: uri::Uri) -> Result<uri::Uri, ConfigValidationError> {
     }
 }
 
+fn canonicalize_path<P: AsRef<path::Path>>(path: P) -> Result<path::PathBuf, LoadConfigError> {
+    let path = relative_path_to_absolute(path)?;
+
+    fs::canonicalize(&path).map_err(|source| LoadConfigError::CanonicalizePath { path, source })
+}
+
 fn relative_path_to_absolute<P: AsRef<path::Path>>(
     path: P,
 ) -> Result<path::PathBuf, LoadConfigError> {
     let path = path.as_ref();
-
     let path = if path.starts_with("./") || path.starts_with("../") {
         env::current_dir()
             .map_err(LoadConfigError::CurrentWorkingDir)?
@@ -204,6 +216,5 @@ fn relative_path_to_absolute<P: AsRef<path::Path>>(
             .map_err(LoadConfigError::ExecutablePath)?
             .with_file_name(path)
     };
-
-    fs::canonicalize(&path).map_err(|source| LoadConfigError::CanonicalizePath { path, source })
+    Ok(path)
 }

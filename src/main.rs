@@ -71,8 +71,10 @@ fn real_main(args: Args) -> anyhow::Result<()> {
         Commands::Manage(command_type) => match command_type {
             Manage::World(world) => match world {
                 World::List => cli::world::list(config.app_config)
-                    .with_context(|| "Failed to get the list of available worlds."),
-                _ => todo!(),
+                    .with_context(|| "Failed to get the list of available worlds"),
+                World::Switch { world_name } => {
+                    cli::world::switch(config.app_config, world_name).map_err(|err| err.into())
+                }
             },
             Manage::User(user_command) => match user_command {
                 User::Enroll { username } => cli::user::enroll(config.app_config, username)
