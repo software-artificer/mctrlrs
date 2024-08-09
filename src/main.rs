@@ -57,9 +57,9 @@ fn real_main(args: Args) -> anyhow::Result<()> {
         Commands::Manage(command_type) => match command_type {
             Manage::World => todo!(),
             Manage::User(user_command) => match user_command {
-                User::Enroll { username } => cli::enroll_user(config.app_config, username)
+                User::Enroll { username } => cli::user_enroll(config.app_config, username)
                     .with_context(|| "Failed to enroll a new user"),
-                User::Remove { username } => cli::remove_user(config.app_config, username)
+                User::Remove { username } => cli::user_remove(config.app_config, username)
                     .with_context(|| "Failed to remove a new user"),
             },
         },
