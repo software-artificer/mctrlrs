@@ -5,7 +5,7 @@ use std::{env, fs, io, net, os::unix::fs::FileTypeExt, path};
 struct ConfigFile {
     listen_on: net::SocketAddr,
     worlds_path: path::PathBuf,
-    current_world_name: path::PathBuf,
+    current_world_path: path::PathBuf,
     server_socket_path: path::PathBuf,
     users_file_path: path::PathBuf,
     #[serde(with = "http_serde::uri")]
@@ -62,7 +62,7 @@ pub enum ConfigValidationError {
 
 pub struct AppConfig {
     pub worlds_path: path::PathBuf,
-    pub current_world_name: path::PathBuf,
+    pub current_world_path: path::PathBuf,
     pub server_socket_path: path::PathBuf,
     pub users_file_path: path::PathBuf,
     pub base_url: uri::Uri,
@@ -92,7 +92,7 @@ impl TryFrom<ConfigFile> for Config {
 
     fn try_from(config: ConfigFile) -> Result<Self, Self::Error> {
         let worlds_path = resolve_worlds_path(config.worlds_path)?;
-        let current_world_name = check_current_world_name(&worlds_path, config.current_world_name)?;
+        let current_world_path = check_current_world_path(config.current_world_path)?;
         let server_socket_path = resolve_server_socket_path(config.server_socket_path)?;
         let users_file_path = resolve_users_file_path(config.users_file_path)?;
         let base_url = check_base_url(config.base_url)?;
@@ -103,7 +103,7 @@ impl TryFrom<ConfigFile> for Config {
             listen_on: config.listen_on,
             app_config: AppConfig {
                 worlds_path,
-                current_world_name,
+                current_world_path,
                 server_socket_path,
                 users_file_path,
                 base_url,
@@ -128,19 +128,13 @@ fn resolve_worlds_path(worlds_path: path::PathBuf) -> Result<path::PathBuf, Conf
     }
 }
 
-fn check_current_world_name(
-    worlds_path: &path::Path,
+fn check_current_world_path(
     current_world: path::PathBuf,
 ) -> Result<path::PathBuf, ConfigValidationError> {
-    if Some(path::Path::new("")) != current_world.parent() {
-        Err(ConfigValidationError::CurrentWorldName(format!(
-            "`{}` must not contain path separators",
-            current_world.display(),
-        )))
-    } else if !worlds_path.join(&current_world).is_symlink() {
+    if !current_world.is_symlink() {
         Err(ConfigValidationError::CurrentWorldName(format!(
             "`{}` must be a symlink",
-            worlds_path.with_file_name(&current_world).display()
+            current_world.display(),
         )))
     } else {
         Ok(current_world)

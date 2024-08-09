@@ -3,7 +3,7 @@ mod core;
 mod web;
 
 use anyhow::Context;
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use std::path;
 
 #[derive(Parser)]
@@ -18,7 +18,7 @@ struct Args {
     config: path::PathBuf,
 }
 
-#[derive(Subcommand, Clone)]
+#[derive(clap::Subcommand, Clone)]
 enum Commands {
     /// Start a web UI for server management
     Server,
@@ -27,16 +27,17 @@ enum Commands {
     Manage(Manage),
 }
 
-#[derive(Subcommand, Clone)]
+#[derive(clap::Subcommand, Clone)]
 enum Manage {
     #[command(subcommand)]
     /// Manage users
     User(User),
+    #[command(subcommand)]
     /// Manage worlds
-    World,
+    World(World),
 }
 
-#[derive(Subcommand, Clone)]
+#[derive(clap::Subcommand, Clone)]
 enum User {
     /// Enroll a new user into the system
     Enroll {
@@ -50,6 +51,17 @@ enum User {
     },
 }
 
+#[derive(clap::Subcommand, Clone)]
+enum World {
+    /// List all available worlds
+    List,
+    /// Switch the active world
+    Switch {
+        /// The name of the world to switch to
+        world_name: String,
+    },
+}
+
 fn real_main(args: Args) -> anyhow::Result<()> {
     let config =
         core::Config::load(args.config).with_context(|| "Failed to load configuration file")?;
@@ -57,11 +69,15 @@ fn real_main(args: Args) -> anyhow::Result<()> {
     match Args::parse().cmd {
         Commands::Server => web::start_server(config).with_context(|| "Web server has failed"),
         Commands::Manage(command_type) => match command_type {
-            Manage::World => todo!(),
+            Manage::World(world) => match world {
+                World::List => cli::world::list(config.app_config)
+                    .with_context(|| "Failed to get the list of available worlds."),
+                _ => todo!(),
+            },
             Manage::User(user_command) => match user_command {
-                User::Enroll { username } => cli::user_enroll(config.app_config, username)
+                User::Enroll { username } => cli::user::enroll(config.app_config, username)
                     .with_context(|| "Failed to enroll a new user"),
-                User::Remove { username } => cli::user_remove(config.app_config, username)
+                User::Remove { username } => cli::user::remove(config.app_config, username)
                     .with_context(|| "Failed to remove a new user"),
             },
         },
