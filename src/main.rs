@@ -38,10 +38,12 @@ enum Manage {
 
 #[derive(Subcommand, Clone)]
 enum User {
+    /// Enroll a new user into the system
     Enroll {
         /// The username for a new user
         username: String,
     },
+    /// Remove a user from the system
     Remove {
         /// The username of the user to remove
         username: String,
