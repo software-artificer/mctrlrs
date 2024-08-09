@@ -26,12 +26,12 @@
         </ul>
       {{/if}}
     </nav>
-    <ul id="messages">
-      {{#each flash_messages}}
-        <li class="{{ this.level }}">{{ this.message }}</li>
-      {{/each}}
-    </ul>
     <section id="content">
+      <ul id="messages">
+        {{#each flash_messages}}
+          <li class="{{ this.level }}">{{ this.message }}</li>
+        {{/each}}
+      </ul>
       {{> content }}
     </section>
     <footer>
