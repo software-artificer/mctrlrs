@@ -87,7 +87,7 @@ pub async fn post(
         Ok(worlds) => match worlds.switch(request.world_id.to_string()) {
             Ok(world) => {
                 flash_messages.info(format!(
-                    r#""{}" is now an active world"#,
+                    r#""{}" is now the active world."#,
                     id_to_name(&world.id())
                 ));
 
