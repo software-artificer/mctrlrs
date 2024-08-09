@@ -45,6 +45,13 @@ impl UserSession {
         self.session
             .insert(Self::USERNAME_KEY, user.username.to_string())
     }
+
+    pub fn get_redirect_location(&self) -> String {
+        self.session
+            .get::<String>(Self::REDIRECT_LOCATION_KEY)
+            .unwrap_or(Some("/".to_string()))
+            .unwrap_or("/".to_string())
+    }
 }
 
 impl middleware::AuthSession for UserSession {

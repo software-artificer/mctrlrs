@@ -53,7 +53,7 @@ pub async fn post(
                         if session.authenticate(user).is_err() {
                             Err(internal_server_error("Failed to update the session state"))
                         } else {
-                            Ok(core_web::redirect("/"))
+                            Ok(core_web::redirect(session.get_redirect_location()))
                         }
                     }
                     core::PasswordVerifyResult::Error(err) => Err(internal_server_error(format!(

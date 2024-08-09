@@ -82,7 +82,7 @@ where
             let is_authenticated = session.is_authenticated()?;
 
             if !is_authenticated && req.path() != login_path {
-                session.save_redirect(login_path.clone())?;
+                session.save_redirect(req.path().to_string())?;
 
                 let response = actix_web::HttpResponse::Found()
                     .insert_header((http::header::LOCATION, login_path))
