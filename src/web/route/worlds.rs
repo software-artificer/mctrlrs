@@ -1,5 +1,5 @@
 use crate::{
-    core,
+    core::{self, server},
     web::{self, session, template},
 };
 use actix_web::web as aweb;
@@ -84,29 +84,58 @@ pub async fn post(
     flash_messages: session::FlashMessages,
 ) -> impl actix_web::Responder {
     match core::Worlds::new(&config.worlds_path, &config.current_world_path) {
-        Ok(worlds) => match worlds.switch(request.world_id.to_string()) {
-            Ok(world) => {
-                flash_messages.info(format!(
-                    r#""{}" is now the active world."#,
-                    id_to_name(&world.id())
-                ));
+        Ok(worlds) => {
+            match server::Client::new(config.rcon_address, config.rcon_password.clone()) {
+                Ok(mut client) => {
+                    if let Err(err) = client.save_all() {
+                        eprintln!("{err}");
 
-                Ok(web::redirect("/worlds"))
-            }
-            Err(core::WorldError::NoSuchWorld(id)) => {
-                flash_messages.error(format!(
-                    r#"World with id "{}" is not available."#,
-                    id.display()
-                ));
+                        flash_messages.error("Failed to save the current world.");
 
-                Ok(web::redirect("/worlds"))
-            }
-            Err(err) => {
-                eprintln!("Failed to switch the world: {err}");
+                        Ok(web::redirect("/worlds"))
+                    } else if let Err(err) = client.stop() {
+                        eprintln!("{err}");
 
-                Err(web::internal_server_error())
+                        flash_messages.error("Failed to stop the Minecraft server.");
+
+                        Ok(web::redirect("/worlds"))
+                    } else {
+                        flash_messages.warning("The Minecraft server was restarted.");
+
+                        match worlds.switch(request.world_id.to_string()) {
+                            Ok(world) => {
+                                flash_messages.info(format!(
+                                    r#""{}" is now the active world."#,
+                                    id_to_name(&world.id())
+                                ));
+
+                                Ok(web::redirect("/worlds"))
+                            }
+                            Err(core::WorldError::NoSuchWorld(id)) => {
+                                flash_messages.error(format!(
+                                    r#"World with id "{}" is not available."#,
+                                    id.display()
+                                ));
+
+                                Ok(web::redirect("/worlds"))
+                            }
+                            Err(err) => {
+                                eprintln!("Failed to switch the world: {err}");
+
+                                Err(web::internal_server_error())
+                            }
+                        }
+                    }
+                }
+                Err(err) => {
+                    eprintln!("Failed to create an RCON client: {err}");
+
+                    flash_messages.error("Unable to connect to the Minecraft server.");
+
+                    Ok(web::redirect("/worlds"))
+                }
             }
-        },
+        }
         Err(err) => {
             eprintln!("Failed to load worlds: {err}");
 
