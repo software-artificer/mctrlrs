@@ -1,12 +1,11 @@
 use actix_web::http::uri;
-use std::{env, fs, io, net, os::unix::fs::FileTypeExt, path};
+use std::{env, fs, io, net, path};
 
 #[derive(serde::Deserialize)]
 struct ConfigFile {
     listen_on: net::SocketAddr,
     worlds_path: path::PathBuf,
     current_world_path: path::PathBuf,
-    server_socket_path: path::PathBuf,
     users_file_path: path::PathBuf,
     #[serde(with = "http_serde::uri")]
     base_url: uri::Uri,
@@ -14,6 +13,8 @@ struct ConfigFile {
     min_password_length: u8,
     #[serde(default = "default_max_password_len")]
     max_password_length: u8,
+    rcon_address: net::SocketAddr,
+    rcon_password: secrecy::SecretString,
 }
 
 fn default_min_password_len() -> u8 {
@@ -52,8 +53,6 @@ pub enum ConfigValidationError {
     WorldsPath(String),
     #[error("Invalid current world path: {}", .0)]
     CurrentWorldPath(String),
-    #[error("Invalid server socket path: {}", .0)]
-    ServerSocketPath(String),
     #[error("Invalid users file path: {}", .0)]
     UsersFilePath(String),
     #[error("Invalid base URL: {}", .0)]
@@ -63,11 +62,12 @@ pub enum ConfigValidationError {
 pub struct AppConfig {
     pub worlds_path: path::PathBuf,
     pub current_world_path: path::PathBuf,
-    pub server_socket_path: path::PathBuf,
+    pub rcon_address: net::SocketAddr,
     pub users_file_path: path::PathBuf,
     pub base_url: uri::Uri,
     pub min_password_length: usize,
     pub max_password_length: usize,
+    pub rcon_password: secrecy::SecretString,
 }
 
 pub struct Config {
@@ -93,7 +93,6 @@ impl TryFrom<ConfigFile> for Config {
     fn try_from(config: ConfigFile) -> Result<Self, Self::Error> {
         let worlds_path = resolve_worlds_path(config.worlds_path)?;
         let current_world_path = check_current_world_path(config.current_world_path)?;
-        let server_socket_path = resolve_server_socket_path(config.server_socket_path)?;
         let users_file_path = resolve_users_file_path(config.users_file_path)?;
         let base_url = check_base_url(config.base_url)?;
         let min_password_length = config.min_password_length.into();
@@ -104,11 +103,12 @@ impl TryFrom<ConfigFile> for Config {
             app_config: AppConfig {
                 worlds_path,
                 current_world_path,
-                server_socket_path,
                 users_file_path,
                 base_url,
                 min_password_length,
                 max_password_length,
+                rcon_address: config.rcon_address,
+                rcon_password: config.rcon_password,
             },
         })
     }
@@ -145,29 +145,6 @@ fn check_current_world_path(
         )))
     } else {
         Ok(current_world)
-    }
-}
-
-fn resolve_server_socket_path(
-    server_socket_path: path::PathBuf,
-) -> Result<path::PathBuf, ConfigValidationError> {
-    let server_socket_path = canonicalize_path(server_socket_path)
-        .map_err(|err| ConfigValidationError::ServerSocketPath(err.to_string()))?;
-
-    let fs_metadata = server_socket_path.metadata().map_err(|err| {
-        ConfigValidationError::ServerSocketPath(format!(
-            "Failed to read metadata for server socket file: {}",
-            err
-        ))
-    })?;
-
-    if !fs_metadata.file_type().is_socket() {
-        Err(ConfigValidationError::ServerSocketPath(format!(
-            "`{}` must be a socket",
-            server_socket_path.display()
-        )))
-    } else {
-        Ok(server_socket_path)
     }
 }
 
