@@ -57,7 +57,7 @@ pub async fn get(
     templates: aweb::Data<handlebars::Handlebars<'_>>,
     flash_messages: session::FlashMessages,
 ) -> impl actix_web::Responder {
-    match core::Worlds::new(&config.worlds_path, &config.current_world_path) {
+    match core::Worlds::new(&config.worlds_path, &config.server_properties_path) {
         Ok(worlds) => {
             let worlds: WorldsList = worlds.into();
             let content = template::Content::new(flash_messages, worlds)
@@ -83,7 +83,7 @@ pub async fn post(
     request: aweb::Form<WorldSwitchForm>,
     flash_messages: session::FlashMessages,
 ) -> impl actix_web::Responder {
-    match core::Worlds::new(&config.worlds_path, &config.current_world_path) {
+    match core::Worlds::new(&config.worlds_path, &config.server_properties_path) {
         Ok(worlds) => {
             match server::Client::new(config.rcon_address, config.rcon_password.clone()) {
                 Ok(mut client) => {

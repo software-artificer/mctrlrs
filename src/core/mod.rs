@@ -1,4 +1,5 @@
 mod config;
+mod properties;
 pub mod server;
 mod user;
 mod world;

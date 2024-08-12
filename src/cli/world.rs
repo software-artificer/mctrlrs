@@ -11,7 +11,7 @@ pub enum Error {
 }
 
 pub fn list(config: core::AppConfig) -> Result<(), Error> {
-    let worlds = core::Worlds::new(&config.worlds_path, &config.current_world_path)
+    let worlds = core::Worlds::new(&config.worlds_path, &config.server_properties_path)
         .map_err(Error::LoadWorlds)?;
 
     println!("The following worlds are currently available:");
@@ -29,7 +29,7 @@ pub fn list(config: core::AppConfig) -> Result<(), Error> {
 }
 
 pub fn switch(config: core::AppConfig, world_name: String) -> Result<(), Error> {
-    let worlds = core::Worlds::new(&config.worlds_path, &config.current_world_path)
+    let worlds = core::Worlds::new(&config.worlds_path, &config.server_properties_path)
         .map_err(Error::LoadWorlds)?;
 
     let mut client = server::Client::new(config.rcon_address, config.rcon_password)

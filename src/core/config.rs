@@ -1,3 +1,4 @@
+use super::properties;
 use actix_web::http::uri;
 use std::{env, fs, io, net, path};
 
@@ -5,7 +6,6 @@ use std::{env, fs, io, net, path};
 struct ConfigFile {
     listen_on: net::SocketAddr,
     worlds_path: path::PathBuf,
-    current_world_path: path::PathBuf,
     users_file_path: path::PathBuf,
     #[serde(with = "http_serde::uri")]
     base_url: uri::Uri,
@@ -13,8 +13,7 @@ struct ConfigFile {
     min_password_length: u8,
     #[serde(default = "default_max_password_len")]
     max_password_length: u8,
-    rcon_address: net::SocketAddr,
-    rcon_password: secrecy::SecretString,
+    server_properties_path: path::PathBuf,
 }
 
 fn default_min_password_len() -> u8 {
@@ -36,37 +35,40 @@ pub enum LoadConfigError {
     #[error("Failed to read configuration file contents {}", .path.display())]
     ReadError {
         path: path::PathBuf,
+        #[source]
         source: io::Error,
     },
-    #[error("Failed to canonicalize the path {path}: {}", .source)]
+    #[error("Failed to canonicalize the path {path}: {source}")]
     CanonicalizePath {
         path: path::PathBuf,
         source: io::Error,
     },
-    #[error("Failed to validate configuration file: {}", .0)]
+    #[error("Failed to validate configuration file: {0}")]
     Validate(#[from] ConfigValidationError),
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConfigValidationError {
-    #[error("Invalid worlds path: {}", .0)]
+    #[error("Invalid worlds path: {0}")]
     WorldsPath(String),
-    #[error("Invalid current world path: {}", .0)]
-    CurrentWorldPath(String),
-    #[error("Invalid users file path: {}", .0)]
+    #[error("Invalid users file path: {0}")]
     UsersFilePath(String),
-    #[error("Invalid base URL: {}", .0)]
+    #[error("Invalid base URL: {0}")]
     InvalidBaseUrl(uri::Uri),
+    #[error("Invalid server.properties path: {}", .0.display())]
+    PropertiesPath(path::PathBuf),
+    #[error("Unable to load server.properties file: {0}")]
+    LoadProperties(#[source] properties::Error),
 }
 
 pub struct AppConfig {
     pub worlds_path: path::PathBuf,
-    pub current_world_path: path::PathBuf,
     pub rcon_address: net::SocketAddr,
     pub users_file_path: path::PathBuf,
     pub base_url: uri::Uri,
     pub min_password_length: usize,
     pub max_password_length: usize,
+    pub server_properties_path: path::PathBuf,
     pub rcon_password: secrecy::SecretString,
 }
 
@@ -92,26 +94,43 @@ impl TryFrom<ConfigFile> for Config {
 
     fn try_from(config: ConfigFile) -> Result<Self, Self::Error> {
         let worlds_path = resolve_worlds_path(config.worlds_path)?;
-        let current_world_path = check_current_world_path(config.current_world_path)?;
         let users_file_path = resolve_users_file_path(config.users_file_path)?;
         let base_url = check_base_url(config.base_url)?;
         let min_password_length = config.min_password_length.into();
         let max_password_length = config.max_password_length.into();
+        let server_properties_path =
+            resolve_server_properties_file_path(config.server_properties_path)?;
+        let rcon_properties = load_server_properties(&server_properties_path)?;
 
         Ok(Self {
             listen_on: config.listen_on,
             app_config: AppConfig {
                 worlds_path,
-                current_world_path,
                 users_file_path,
                 base_url,
                 min_password_length,
                 max_password_length,
-                rcon_address: config.rcon_address,
-                rcon_password: config.rcon_password,
+                server_properties_path,
+                rcon_address: net::SocketAddr::from((
+                    net::Ipv4Addr::new(127, 0, 0, 1),
+                    rcon_properties.port,
+                )),
+                rcon_password: rcon_properties.password,
             },
         })
     }
+}
+
+fn load_server_properties(
+    path: &path::Path,
+) -> Result<properties::RconProperties, ConfigValidationError> {
+    let properties =
+        properties::Properties::parse(path).map_err(ConfigValidationError::LoadProperties)?;
+    let rcon_properties = properties
+        .rcon_properties()
+        .map_err(ConfigValidationError::LoadProperties)?;
+
+    Ok(rcon_properties)
 }
 
 fn resolve_worlds_path(worlds_path: path::PathBuf) -> Result<path::PathBuf, ConfigValidationError> {
@@ -128,24 +147,11 @@ fn resolve_worlds_path(worlds_path: path::PathBuf) -> Result<path::PathBuf, Conf
     }
 }
 
-fn check_current_world_path(
-    current_world: path::PathBuf,
+fn resolve_server_properties_file_path(
+    properties_path: path::PathBuf,
 ) -> Result<path::PathBuf, ConfigValidationError> {
-    let current_world = relative_path_to_absolute(&current_world).map_err(|_| {
-        ConfigValidationError::CurrentWorldPath(format!(
-            "No such file: {}",
-            current_world.display()
-        ))
-    })?;
-
-    if !current_world.is_symlink() {
-        Err(ConfigValidationError::CurrentWorldPath(format!(
-            "`{}` must be a symlink",
-            current_world.display(),
-        )))
-    } else {
-        Ok(current_world)
-    }
+    canonicalize_path(&properties_path)
+        .map_err(|_| ConfigValidationError::PropertiesPath(properties_path))
 }
 
 fn resolve_users_file_path(

@@ -1,9 +1,9 @@
-use std::{fs, io, os::unix::fs as ufs, path};
+use super::properties;
+use std::{fs, io, path};
 
 pub struct World {
     id: path::PathBuf,
     pub is_active: bool,
-    path: path::PathBuf,
 }
 
 impl World {
@@ -14,17 +14,19 @@ impl World {
 
 pub struct Worlds {
     worlds: Vec<World>,
-    current_world: path::PathBuf,
+    properties: properties::Properties,
+    current_world_name: String,
 }
 
 impl Worlds {
     pub fn new(
         worlds_path: &path::Path,
-        current_world_path: &path::Path,
+        server_properties_path: &path::Path,
     ) -> Result<Self, WorldError> {
-        let current_world = current_world_path
-            .read_link()
-            .map_err(WorldError::ReadWorldDir)?;
+        let properties = properties::Properties::parse(server_properties_path)
+            .map_err(WorldError::LoadServerProperties)?;
+        let current_world_name = properties.level_name();
+        let current_world = path::PathBuf::from(&current_world_name);
 
         let mut worlds = vec![];
 
@@ -33,7 +35,7 @@ impl Worlds {
             let entry = entry.map_err(WorldError::ReadWorldDir)?;
             let entry_path = entry.path();
 
-            if !entry_path.is_dir() || entry_path.is_symlink() {
+            if !entry_path.is_dir() {
                 continue;
             }
 
@@ -44,14 +46,14 @@ impl Worlds {
 
             worlds.push(World {
                 id: entry_name.to_owned(),
-                is_active: entry_path == current_world,
-                path: entry_path,
+                is_active: entry_name == current_world,
             });
         }
 
         Ok(Self {
             worlds,
-            current_world: current_world_path.to_owned(),
+            properties,
+            current_world_name,
         })
     }
 
@@ -60,28 +62,35 @@ impl Worlds {
     }
 
     pub fn switch(self, world_name: String) -> Result<World, WorldError> {
-        let world_id: path::PathBuf = world_name.into();
+        if self.current_world_name == world_name {
+            Err(WorldError::AlreadyActive(world_name))
+        } else {
+            let world_id = path::PathBuf::from(&world_name);
 
-        match self.worlds.into_iter().find(|world| world.id == world_id) {
-            Some(world) => {
-                if self.current_world.is_symlink() && !world.is_active {
-                    fs::remove_file(&self.current_world).map_err(WorldError::Switch)?;
-                    ufs::symlink(&world.path, &self.current_world).map_err(WorldError::Switch)?;
+            match self.worlds.into_iter().find(|world| world.id == world_id) {
+                Some(world) => {
+                    self.properties
+                        .with_level_name(world_name)
+                        .map_err(WorldError::Switch)?;
+
+                    Ok(world)
                 }
-
-                Ok(world)
+                _ => Err(WorldError::NoSuchWorld(world_id)),
             }
-            _ => Err(WorldError::NoSuchWorld(world_id)),
         }
     }
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum WorldError {
-    #[error("Unable to read worlds directory: {}", .0)]
+    #[error("Unable to read worlds directory: {0}")]
     ReadWorldDir(#[source] io::Error),
     #[error("No world with id `{}`", .0.display())]
     NoSuchWorld(path::PathBuf),
-    #[error("Failed to switch the world: {}", .0)]
-    Switch(#[source] io::Error),
+    #[error("World `{0}` is already active")]
+    AlreadyActive(String),
+    #[error("Failed to switch the world: {0}")]
+    Switch(#[source] properties::Error),
+    #[error("Failed to load server.properties file: {0}")]
+    LoadServerProperties(#[source] properties::Error),
 }
