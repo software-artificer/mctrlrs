@@ -1,6 +1,17 @@
 {{#> page}}
 
 {{#*inline "content"}}
+<form>
+  <fieldset>
+    <legend>Server Info</legend>
+    <h3>{{content.summary}}</h3>
+    <ul>
+    {{#each content.players}}
+      <li>{{this}}</li>
+    {{/each}}
+    </ul>
+  </fieldset>
+</form>
 {{/inline}}
 
 {{/page}}
