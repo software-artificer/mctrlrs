@@ -1,7 +1,7 @@
+use actix::{Actor, AsyncContext};
 use actix_session::storage;
 use rand::distributions::{self, DistString};
 use std::{collections, time};
-use tokio::sync::{mpsc, oneshot};
 
 type SessionState = collections::HashMap<String, String>;
 
@@ -29,75 +29,122 @@ impl SessionEntry {
     }
 }
 
-enum Message {
-    Load(String, oneshot::Sender<Option<SessionState>>),
-    Save(SessionState, time::Duration, oneshot::Sender<String>),
-    Update(
-        String,
-        SessionState,
-        time::Duration,
-        oneshot::Sender<String>,
-    ),
-    UpdateTtl(String, time::Duration),
-    Delete(String),
+struct LoadMessage(String);
+
+impl actix::Message for LoadMessage {
+    type Result = Option<SessionState>;
+}
+
+struct SaveMessage {
+    state: SessionState,
+    ttl: time::Duration,
+}
+
+impl actix::Message for SaveMessage {
+    type Result = String;
+}
+
+struct UpdateMessage {
+    key: String,
+    state: SessionState,
+    ttl: time::Duration,
+}
+
+impl actix::Message for UpdateMessage {
+    type Result = String;
+}
+
+struct UpdateTtlMessage {
+    key: String,
+    ttl: time::Duration,
+}
+
+impl actix::Message for UpdateTtlMessage {
+    type Result = ();
+}
+
+struct DeleteMessage(String);
+
+impl actix::Message for DeleteMessage {
+    type Result = ();
+}
+
+#[derive(Default)]
+pub struct SessionActor(collections::HashMap<String, SessionEntry>);
+
+impl actix::Actor for SessionActor {
+    type Context = actix::Context<Self>;
+}
+
+impl actix::Handler<LoadMessage> for SessionActor {
+    type Result = <LoadMessage as actix::Message>::Result;
+
+    fn handle(&mut self, msg: LoadMessage, ctx: &mut Self::Context) -> Self::Result {
+        match self.0.get(&msg.0) {
+            Some(entry) if entry.is_fresh() => Some(entry.state.to_owned()),
+            Some(_) => {
+                ctx.notify(DeleteMessage(msg.0));
+
+                None
+            }
+            _ => None,
+        }
+    }
+}
+
+impl actix::Handler<DeleteMessage> for SessionActor {
+    type Result = <DeleteMessage as actix::Message>::Result;
+
+    fn handle(&mut self, msg: DeleteMessage, _: &mut Self::Context) -> Self::Result {
+        self.0.remove(&msg.0);
+    }
+}
+
+impl actix::Handler<UpdateMessage> for SessionActor {
+    type Result = <UpdateMessage as actix::Message>::Result;
+
+    fn handle(&mut self, msg: UpdateMessage, _: &mut Self::Context) -> Self::Result {
+        self.0
+            .insert(msg.key.clone(), SessionEntry::new(msg.ttl, msg.state));
+
+        msg.key
+    }
+}
+
+impl actix::Handler<SaveMessage> for SessionActor {
+    type Result = <SaveMessage as actix::Message>::Result;
+
+    fn handle(&mut self, msg: SaveMessage, _: &mut Self::Context) -> Self::Result {
+        let mut rng = rand::thread_rng();
+        let key = distributions::Alphanumeric.sample_string(&mut rng, 32);
+
+        self.0
+            .insert(key.clone(), SessionEntry::new(msg.ttl, msg.state));
+
+        key
+    }
+}
+
+impl actix::Handler<UpdateTtlMessage> for SessionActor {
+    type Result = <UpdateTtlMessage as actix::Message>::Result;
+
+    fn handle(&mut self, msg: UpdateTtlMessage, _: &mut Self::Context) -> Self::Result {
+        self.0.entry(msg.key).and_modify(|e| e.update_ttl(msg.ttl));
+    }
 }
 
 #[derive(Clone)]
 pub struct SessionStore {
-    channel: mpsc::UnboundedSender<Message>,
+    addr: actix::Addr<SessionActor>,
 }
 
 impl Default for SessionStore {
     fn default() -> Self {
-        let (tx, rx) = mpsc::unbounded_channel();
+        let actor = SessionActor::default();
+        let addr = actor.start();
 
-        start_store(tx.clone(), rx);
-
-        Self { channel: tx }
+        Self { addr }
     }
-}
-
-fn start_store(tx_self: mpsc::UnboundedSender<Message>, mut rx: mpsc::UnboundedReceiver<Message>) {
-    tokio::spawn(async move {
-        let mut store: collections::HashMap<String, SessionEntry> = Default::default();
-
-        while let Some(message) = rx.recv().await {
-            match message {
-                Message::Load(key, tx) => {
-                    let entry = match store.get(&key) {
-                        Some(entry) if entry.is_fresh() => Some(entry.state.to_owned()),
-                        Some(_) => {
-                            let _ = tx_self.send(Message::Delete(key));
-
-                            None
-                        }
-                        _ => None,
-                    };
-
-                    let _ = tx.send(entry);
-                }
-                Message::Save(state, ttl, tx) => {
-                    let mut rng = rand::thread_rng();
-                    let key = distributions::Alphanumeric.sample_string(&mut rng, 32);
-
-                    store.insert(key.clone(), SessionEntry::new(ttl, state));
-
-                    let _ = tx.send(key);
-                }
-                Message::Update(key, state, ttl, tx) => {
-                    store.insert(key.clone(), SessionEntry::new(ttl, state));
-
-                    let _ = tx.send(key);
-                }
-                Message::UpdateTtl(key, ttl) => {
-                    store.entry(key).and_modify(|e| e.update_ttl(ttl));
-                }
-                Message::Delete(key) => {
-                    store.remove(&key);
-                }
-            }
-        }
-    });
 }
 
 impl storage::SessionStore for SessionStore {
@@ -105,13 +152,10 @@ impl storage::SessionStore for SessionStore {
         &self,
         session_key: &storage::SessionKey,
     ) -> Result<Option<SessionState>, storage::LoadError> {
-        let (tx, rx) = oneshot::channel();
-
-        self.channel
-            .send(Message::Load(session_key.as_ref().to_owned(), tx))
-            .map_err(|err| storage::LoadError::Other(err.into()))?;
-
-        rx.await.map_err(|e| storage::LoadError::Other(e.into()))
+        self.addr
+            .send(LoadMessage(session_key.as_ref().to_owned()))
+            .await
+            .map_err(|err| storage::LoadError::Other(err.into()))
     }
 
     async fn save(
@@ -119,13 +163,12 @@ impl storage::SessionStore for SessionStore {
         session_state: SessionState,
         ttl: &actix_web::cookie::time::Duration,
     ) -> Result<storage::SessionKey, storage::SaveError> {
-        let (tx, rx) = oneshot::channel();
-
-        self.channel
-            .send(Message::Save(session_state, ttl.unsigned_abs(), tx))
-            .map_err(|err| storage::SaveError::Other(err.into()))?;
-
-        rx.await
+        self.addr
+            .send(SaveMessage {
+                state: session_state,
+                ttl: ttl.unsigned_abs(),
+            })
+            .await
             .map_err(|err| storage::SaveError::Other(err.into()))?
             .try_into()
             .map_err(|err: <storage::SessionKey as TryFrom<String>>::Error| {
@@ -139,18 +182,13 @@ impl storage::SessionStore for SessionStore {
         session_state: SessionState,
         ttl: &actix_web::cookie::time::Duration,
     ) -> Result<storage::SessionKey, storage::UpdateError> {
-        let (tx, rx) = oneshot::channel();
-
-        self.channel
-            .send(Message::Update(
-                session_key.into(),
-                session_state,
-                ttl.unsigned_abs(),
-                tx,
-            ))
-            .map_err(|err| storage::UpdateError::Other(err.into()))?;
-
-        rx.await
+        self.addr
+            .send(UpdateMessage {
+                key: session_key.into(),
+                state: session_state,
+                ttl: ttl.unsigned_abs(),
+            })
+            .await
             .map_err(|err| storage::UpdateError::Other(err.into()))?
             .try_into()
             .map_err(|err: <storage::SessionKey as TryFrom<String>>::Error| {
@@ -163,18 +201,19 @@ impl storage::SessionStore for SessionStore {
         session_key: &storage::SessionKey,
         ttl: &actix_web::cookie::time::Duration,
     ) -> Result<(), anyhow::Error> {
-        self.channel.send(Message::UpdateTtl(
-            session_key.as_ref().into(),
-            ttl.unsigned_abs(),
-        ))?;
-
-        Ok(())
+        Ok(self
+            .addr
+            .send(UpdateTtlMessage {
+                key: session_key.as_ref().into(),
+                ttl: ttl.unsigned_abs(),
+            })
+            .await?)
     }
 
     async fn delete(&self, session_key: &storage::SessionKey) -> Result<(), anyhow::Error> {
-        self.channel
-            .send(Message::Delete(session_key.as_ref().into()))?;
-
-        Ok(())
+        Ok(self
+            .addr
+            .send(DeleteMessage(session_key.as_ref().into()))
+            .await?)
     }
 }

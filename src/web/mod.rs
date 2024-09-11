@@ -26,11 +26,12 @@ pub enum Error {
 }
 
 pub fn start_server(config: core::Config) -> Result<(), Error> {
-    runtime::Builder::new_multi_thread()
+    let rt = runtime::Builder::new_multi_thread()
         .enable_io()
         .enable_time()
-        .build()?
-        .block_on(run_server(config))
+        .build()?;
+
+    actix_web::rt::System::with_tokio_rt(|| rt).block_on(run_server(config))
 }
 
 fn internal_server_error() -> error::InternalError<&'static str> {
