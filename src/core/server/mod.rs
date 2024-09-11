@@ -29,7 +29,19 @@ impl actix::Actor for RconActor {
     type Context = actix::Context<Self>;
 }
 
-struct Command(String);
+enum Command {
+    Stop,
+    Other(String),
+}
+
+impl From<Command> for String {
+    fn from(value: Command) -> Self {
+        match value {
+            Command::Stop => "stop".to_string(),
+            Command::Other(cmd) => cmd,
+        }
+    }
+}
 
 impl actix::Message for Command {
     type Result = Result<String, rcon::RconError>;
@@ -39,19 +51,25 @@ impl actix::Handler<Command> for RconActor {
     type Result = <Command as actix::Message>::Result;
 
     fn handle(&mut self, msg: Command, _: &mut Self::Context) -> Self::Result {
-        if self.client.is_none() {
-            self.client = Some(
-                rcon::RconClient::new()
-                    .connect(self.addr)?
-                    .authenticate(self.password.clone())?,
-            );
-        }
+        let mut client = match self.client.take() {
+            Some(client) => client,
+            None => rcon::RconClient::new()
+                .connect(self.addr)?
+                .authenticate(self.password.clone())?,
+        };
 
-        let mut client = self.client.take().unwrap();
+        let (msg, should_shutdown) = match msg {
+            Command::Stop => (msg.into(), true),
+            _ => (msg.into(), false),
+        };
 
-        match client.command(msg.0) {
+        match client.command(msg) {
             Ok(res) => {
-                self.client = Some(client);
+                if should_shutdown {
+                    let _ = client.disconnect();
+                } else {
+                    self.client = Some(client);
+                }
 
                 Ok(res)
             }
@@ -79,29 +97,33 @@ impl Client {
     }
 
     pub async fn save_all(&self) -> Result<(), Error> {
-        run_command(&self.0, "save-all", Error::SaveAll).await?;
+        run_command(
+            &self.0,
+            Command::Other("save-all".to_string()),
+            Error::SaveAll,
+        )
+        .await?;
 
         Ok(())
     }
 
     pub async fn stop(&self) -> Result<(), Error> {
-        run_command(&self.0, "stop", Error::Stop).await?;
+        run_command(&self.0, Command::Stop, Error::Stop).await?;
 
         Ok(())
     }
 }
 
-async fn run_command<F, C>(
+async fn run_command<F>(
     actor: &actix::Addr<RconActor>,
-    command: C,
+    command: Command,
     err_func: F,
 ) -> Result<String, Error>
 where
-    C: AsRef<str>,
     F: FnOnce(rcon::RconError) -> Error,
 {
     actor
-        .send(Command(command.as_ref().to_string()))
+        .send(command)
         .await
         .map_err(Error::Actor)?
         .map_err(|e| match e {
