@@ -26,11 +26,21 @@ pub enum RconError {
     InvalidId(i32),
     #[error("Invalid packet type received from the server. Expected {0}, got: {1}")]
     InvalidPacketType(String, String),
+    #[error("Failed to shutdown the TCP connection to the server: {0}")]
+    Shutdown(#[source] io::Error),
 }
 
 pub struct Disconnected;
 
 pub struct Connected(net::TcpStream);
+
+impl Connected {
+    fn disconnect(self) -> Result<(), RconError> {
+        self.0
+            .shutdown(net::Shutdown::Both)
+            .map_err(RconError::Shutdown)
+    }
+}
 
 pub struct Authenticated {
     inner: Connected,
@@ -119,6 +129,10 @@ impl RconClient<Authenticated> {
                 packet.packet_type.to_string(),
             ))
         }
+    }
+
+    pub fn disconnect(self) -> Result<(), RconError> {
+        self.state.inner.disconnect()
     }
 
     fn id(&mut self) -> i32 {

@@ -3,7 +3,7 @@ mod route;
 mod session;
 mod template;
 
-use crate::core;
+use crate::core::{self, server};
 use actix_session::config;
 use actix_web::{
     cookie::{self, time},
@@ -59,11 +59,16 @@ async fn run_server(config: core::Config) -> Result<(), Error> {
     let secret_key = cookie::Key::generate();
     let session_store = session::SessionStore::default();
     let app_config = web::Data::new(config.app_config);
+    let client = web::Data::new(server::Client::new(
+        app_config.rcon_address,
+        app_config.rcon_password.clone(),
+    ));
 
     actix_web::HttpServer::new(move || {
         actix_web::App::new()
             .app_data(templates.clone())
             .app_data(app_config.clone())
+            .app_data(client.clone())
             .service(actix_files::Files::new("/static", "./static/"))
             .wrap(middleware::ConditionalMiddleware::new(
                 middleware::AuthMiddleware::<session::UserSession>::new("/login"),
