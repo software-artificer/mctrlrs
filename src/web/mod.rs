@@ -10,12 +10,9 @@ use actix_web::{
     error, http, web,
 };
 use std::{io, net};
-use tokio::runtime;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("Failed to build Tokio runtime")]
-    BuildRuntime(#[from] io::Error),
     #[error("Failed to listen on the {socket}")]
     BindServer {
         socket: net::SocketAddr,
@@ -23,15 +20,12 @@ pub enum Error {
     },
     #[error("Failed to load handlebars template")]
     Template(#[from] handlebars::TemplateError),
+    #[error("Actix web server failed: {0}")]
+    Actix(#[from] std::io::Error),
 }
 
 pub fn start_server(config: core::Config) -> Result<(), Error> {
-    let rt = runtime::Builder::new_multi_thread()
-        .enable_io()
-        .enable_time()
-        .build()?;
-
-    actix_web::rt::System::with_tokio_rt(|| rt).block_on(run_server(config))
+    actix_web::rt::System::new().block_on(run_server(config))
 }
 
 fn internal_server_error() -> error::InternalError<&'static str> {

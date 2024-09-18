@@ -20,4 +20,3 @@ secrecy = { version = "0.8", features = [ "serde" ] }
 serde = { version = "1", default-features = false, features = [ "serde_derive" ] }
 serde_yml = { version = "0.0.11", default-features = false, features = [] }
 thiserror = { version = "1", default-features = false, features = [] }
-tokio = { version = "1", default-features = false, features = [ "rt-multi-thread", "sync" ] }

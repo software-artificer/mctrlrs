@@ -8,8 +8,6 @@ pub enum Error {
     LoadWorlds(#[source] core::WorldError),
     #[error("Failed to switch an active world: {0}")]
     Switch(#[source] anyhow::Error),
-    #[error("Failed to start tokio runtime: {0}")]
-    Runtime(#[source] anyhow::Error),
 }
 
 pub fn list(config: core::AppConfig) -> Result<(), Error> {
@@ -31,32 +29,28 @@ pub fn list(config: core::AppConfig) -> Result<(), Error> {
 }
 
 pub fn switch(config: core::AppConfig, world_name: String) -> Result<(), Error> {
-    tokio::runtime::Builder::new_current_thread()
-        .build()
-        .with_context(|| "Failed to start Tokio runtime")
-        .map_err(Error::Runtime)?
-        .block_on(async {
-            let worlds = core::Worlds::new(&config.worlds_path, &config.server_properties_path)
-                .map_err(Error::LoadWorlds)?;
+    actix_web::rt::System::new().block_on(async {
+        let worlds = core::Worlds::new(&config.worlds_path, &config.server_properties_path)
+            .map_err(Error::LoadWorlds)?;
 
-            let client = server::Client::new(config.rcon_address, config.rcon_password);
-            client
-                .save_all()
-                .await
-                .with_context(|| "Failed to save the world before switching")
-                .map_err(Error::Switch)?;
-            client
-                .stop()
-                .await
-                .with_context(|| "Failed to shut down the server before switching")
-                .map_err(Error::Switch)?;
+        let client = server::Client::new(config.rcon_address, config.rcon_password);
+        client
+            .save_all()
+            .await
+            .with_context(|| "Failed to save the world before switching")
+            .map_err(Error::Switch)?;
+        client
+            .stop()
+            .await
+            .with_context(|| "Failed to shut down the server before switching")
+            .map_err(Error::Switch)?;
 
-            let world = worlds
-                .switch(world_name)
-                .map_err(|e| Error::Switch(e.into()))?;
+        let world = worlds
+            .switch(world_name)
+            .map_err(|e| Error::Switch(e.into()))?;
 
-            println!("The currently active world was changed to: {}", world.id(),);
+        println!("The currently active world was changed to: {}", world.id(),);
 
-            Ok(())
-        })
+        Ok(())
+    })
 }

@@ -861,7 +861,6 @@ dependencies = [
  "serde",
  "serde_yml",
  "thiserror",
- "tokio",
 ]
 
 [[package]]
