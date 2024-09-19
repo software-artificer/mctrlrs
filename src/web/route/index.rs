@@ -28,8 +28,10 @@ pub async fn get(
         Err(err) => {
             eprintln!("Failed to get the list of players: {err}");
 
+            flash_messages.error("Failed to communicate with the Minecraft server");
+
             IndexContent {
-                summary: String::from("Failed to get the list of players"),
+                summary: String::from("Unable to fetch a list of online players"),
                 players: vec![],
             }
         }
