@@ -14,10 +14,21 @@ pub enum Error {
     BrokenConnection(#[source] rcon::RconError),
     #[error("Failed to send a message to the actor: {0}")]
     Actor(#[source] actix::MailboxError),
+    #[error("Failed to parse server tick stats: {0}")]
+    TickStats(String),
 }
 
 #[derive(Clone)]
 pub struct Client(actix::Addr<actor::RconActor>);
+
+#[derive(serde::Serialize)]
+pub struct TickStats {
+    pub average: String,
+    pub target: String,
+    pub p50: String,
+    pub p95: String,
+    pub p99: String,
+}
 
 impl Client {
     pub fn new(addr: net::SocketAddr, password: secrecy::SecretString) -> Self {
@@ -51,6 +62,33 @@ impl Client {
             }
             None => vec![],
         })
+    }
+
+    pub async fn query_tick(&self) -> Result<TickStats, Error> {
+        let tick_stats =
+            run_command(&self.0, actor::Command::Other("tick query".to_string())).await?;
+
+        // Example server output:
+        // Target tick rate: 20.0 per second.
+        // Average time per tick: 13.2ms (Target: 50.0ms)
+        // Percentiles: P50: 13.0ms P95: 16.0ms P99: 18.6ms, sample: 100
+        let tick_stats_stripped = tick_stats.replace([':', ',', '(', ')'], " ");
+        let timings: Vec<_> = tick_stats_stripped
+            .split_whitespace()
+            .filter(|w| w.ends_with("ms"))
+            .collect();
+
+        if timings.len() != 5 {
+            Err(Error::TickStats(tick_stats))
+        } else {
+            Ok(TickStats {
+                average: timings[0].to_string(),
+                target: timings[1].to_string(),
+                p50: timings[2].to_string(),
+                p95: timings[3].to_string(),
+                p99: timings[4].to_string(),
+            })
+        }
     }
 }
 

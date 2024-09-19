@@ -7,7 +7,8 @@ use actix_web::web;
 #[derive(serde::Serialize)]
 struct IndexContent {
     players: Vec<String>,
-    summary: String,
+    player_summary: String,
+    tick_stats: Option<server::TickStats>,
 }
 
 pub async fn get(
@@ -15,7 +16,7 @@ pub async fn get(
     flash_messages: session::FlashMessages,
     client: web::Data<server::Client>,
 ) -> impl actix_web::Responder {
-    let content = match client.list().await {
+    let (player_summary, players) = match client.list().await {
         Ok(players) => {
             let summary = match players.len() {
                 0 => "There are no players online".to_string(),
@@ -23,18 +24,35 @@ pub async fn get(
                 len => format!("There are {len} players online"),
             };
 
-            IndexContent { summary, players }
+            (summary, players)
         }
         Err(err) => {
             eprintln!("Failed to get the list of players: {err}");
 
-            flash_messages.error("Failed to communicate with the Minecraft server");
+            flash_messages.error("Failed to communicate with the Minecraft server.");
 
-            IndexContent {
-                summary: String::from("Unable to fetch a list of online players"),
-                players: vec![],
-            }
+            (
+                String::from("Unable to fetch a list of online players"),
+                vec![],
+            )
         }
+    };
+
+    let tick_stats = match client.query_tick().await {
+        Ok(stats) => Some(stats),
+        Err(err) => {
+            eprintln!("Failed to query tick stats from the server: {err}");
+
+            flash_messages.error("Failed to fetch tick stats from the Minecraft server.");
+
+            None
+        }
+    };
+
+    let content = IndexContent {
+        player_summary,
+        players,
+        tick_stats,
     };
 
     let content =

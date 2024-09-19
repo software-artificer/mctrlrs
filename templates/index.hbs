@@ -4,12 +4,24 @@
 <form>
   <fieldset>
     <legend>Server Info</legend>
-    <h3>{{content.summary}}</h3>
+    <h3>{{content.player_summary}}</h3>
     <ul>
     {{#each content.players}}
       <li>{{this}}</li>
     {{/each}}
     </ul>
+    <h3>
+      {{#if content.tick_stats}}
+        Server tick stats
+      {{else}}
+        No tick stats available
+      {{/if}}
+    </h3>
+    {{#if content.tick_stats}}
+      Average tick: <b>{{content.tick_stats.average}}</b><br>
+      Target tick: <b>{{content.tick_stats.target}}</b><br>
+      p50: <b>{{content.tick_stats.p50}}</b>, p95: <b>{{content.tick_stats.p95}}</b>, p99: <b>{{content.tick_stats.p99}}</b>
+    {{/if}}
   </fieldset>
 </form>
 {{/inline}}
