@@ -1,6 +1,6 @@
 use super::properties;
 use actix_web::http::uri;
-use std::{env, fs, io, net, path};
+use std::{env, fs, io, net, num, path};
 
 #[derive(serde::Deserialize)]
 struct ConfigFile {
@@ -16,6 +16,7 @@ struct ConfigFile {
     server_properties_path: path::PathBuf,
     tls_key: Option<path::PathBuf>,
     tls_chain: Option<path::PathBuf>,
+    worker_count: Option<num::NonZeroUsize>,
 }
 
 fn default_min_password_len() -> u8 {
@@ -85,6 +86,7 @@ pub struct Config {
     pub listen_on: net::SocketAddr,
     pub app_config: AppConfig,
     pub tls: Option<TlsConfig>,
+    pub worker_count: Option<num::NonZeroUsize>,
 }
 
 impl Config {
@@ -129,6 +131,7 @@ impl TryFrom<ConfigFile> for Config {
                 )),
                 rcon_password: rcon_properties.password,
             },
+            worker_count: config.worker_count,
         })
     }
 }

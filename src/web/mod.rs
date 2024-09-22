@@ -97,6 +97,12 @@ async fn run_server(config: core::Config) -> Result<(), Error> {
             .route("/worlds", web::post().to(route::worlds_post))
     });
 
+    let server = if let Some(worker_count) = config.worker_count {
+        server.workers(worker_count.get())
+    } else {
+        server
+    };
+
     let server = if let Some(tls) = config.tls {
         let tls_config = configure_tls(tls).map_err(Error::Tls)?;
         server.bind_rustls_0_23(config.listen_on, tls_config)
