@@ -14,6 +14,8 @@ struct ConfigFile {
     #[serde(default = "default_max_password_len")]
     max_password_length: u8,
     server_properties_path: path::PathBuf,
+    tls_key: Option<path::PathBuf>,
+    tls_chain: Option<path::PathBuf>,
 }
 
 fn default_min_password_len() -> u8 {
@@ -59,6 +61,8 @@ pub enum ConfigValidationError {
     PropertiesPath(path::PathBuf),
     #[error("Unable to load server.properties file: {0}")]
     LoadProperties(#[source] properties::Error),
+    #[error("Invalid TLS configuration: {0}")]
+    Tls(String),
 }
 
 pub struct AppConfig {
@@ -72,9 +76,15 @@ pub struct AppConfig {
     pub rcon_password: secrecy::SecretString,
 }
 
+pub struct TlsConfig {
+    pub key: path::PathBuf,
+    pub chain: path::PathBuf,
+}
+
 pub struct Config {
     pub listen_on: net::SocketAddr,
     pub app_config: AppConfig,
+    pub tls: Option<TlsConfig>,
 }
 
 impl Config {
@@ -101,9 +111,11 @@ impl TryFrom<ConfigFile> for Config {
         let server_properties_path =
             resolve_server_properties_file_path(config.server_properties_path)?;
         let rcon_properties = load_server_properties(&server_properties_path)?;
+        let tls = resolve_tls_config(config.tls_key, config.tls_chain)?;
 
         Ok(Self {
             listen_on: config.listen_on,
+            tls,
             app_config: AppConfig {
                 worlds_path,
                 users_file_path,
@@ -118,6 +130,20 @@ impl TryFrom<ConfigFile> for Config {
                 rcon_password: rcon_properties.password,
             },
         })
+    }
+}
+
+fn resolve_tls_config(
+    key: Option<path::PathBuf>,
+    chain: Option<path::PathBuf>,
+) -> Result<Option<TlsConfig>, ConfigValidationError> {
+    match (key, chain) {
+        (Some(key), Some(chain)) => Ok(Some(TlsConfig { key, chain })),
+        (None, None) => Ok(None),
+        _ => Err(ConfigValidationError::Tls(
+            "Both `tls_key` and `tls_chain` options need to be either present or absent"
+                .to_string(),
+        ))?,
     }
 }
 

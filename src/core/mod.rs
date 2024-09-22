@@ -4,7 +4,7 @@ pub mod server;
 mod user;
 mod world;
 
-pub use config::{AppConfig, Config};
+pub use config::{AppConfig, Config, TlsConfig};
 // pub use server::Server;
 pub use user::{
     InvalidUsernameError, ManageUsersError, Password, PasswordError, PasswordVerifyResult, User,

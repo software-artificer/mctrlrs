@@ -9,7 +9,7 @@ use actix_web::{
     cookie::{self, time},
     error, http, web,
 };
-use std::{io, net};
+use std::{fs, io, net};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -22,6 +22,8 @@ pub enum Error {
     Template(#[from] handlebars::TemplateError),
     #[error("Actix web server failed: {0}")]
     Actix(#[from] std::io::Error),
+    #[error("Failed to configure TLS: {0}")]
+    Tls(String),
 }
 
 pub fn start_server(config: core::Config) -> Result<(), Error> {
@@ -58,7 +60,7 @@ async fn run_server(config: core::Config) -> Result<(), Error> {
         app_config.rcon_password.clone(),
     ));
 
-    actix_web::HttpServer::new(move || {
+    let server = actix_web::HttpServer::new(move || {
         actix_web::App::new()
             .app_data(templates.clone())
             .app_data(app_config.clone())
@@ -93,14 +95,70 @@ async fn run_server(config: core::Config) -> Result<(), Error> {
             .route("/enroll", web::post().to(route::enroll_post))
             .route("/worlds", web::get().to(route::worlds_get))
             .route("/worlds", web::post().to(route::worlds_post))
-    })
-    .bind(config.listen_on)
+    });
+
+    let server = if let Some(tls) = config.tls {
+        let tls_config = configure_tls(tls).map_err(Error::Tls)?;
+        server.bind_rustls_0_23(config.listen_on, tls_config)
+    } else {
+        server.bind(config.listen_on)
+    }
     .map_err(|err| Error::BindServer {
         socket: config.listen_on,
         source: err,
-    })?
-    .run()
-    .await?;
+    })?;
+
+    server.run().await?;
 
     Ok(())
+}
+
+fn configure_tls(tls: core::TlsConfig) -> Result<rustls::ServerConfig, String> {
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .map_err(|_| "Failed to install the default TLS provider to ring".to_string())?;
+
+    let config = rustls::ServerConfig::builder().with_no_client_auth();
+
+    let key_file = fs::File::open(&tls.key).map_err(|e| {
+        format!(
+            "Failed to open a private key file `{}`: {e}",
+            tls.key.display()
+        )
+    })?;
+    let key_file = &mut io::BufReader::new(key_file);
+
+    let chain_file = fs::File::open(&tls.chain).map_err(|e| {
+        format!(
+            "Failed to open a certificate chain file `{}`: {e}",
+            tls.chain.display()
+        )
+    })?;
+    let chain_file = &mut io::BufReader::new(chain_file);
+
+    let cert_chain = rustls_pemfile::certs(chain_file)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| {
+            format!(
+                "Failed to parse a certificate chain file `{}`: {e}",
+                tls.chain.display()
+            )
+        })?;
+
+    let key = rustls_pemfile::private_key(key_file).map_err(|e| {
+        format!(
+            "Failed to parse a private key file `{}`: {e}",
+            tls.key.display()
+        )
+    })?;
+    let key = key.ok_or_else(|| {
+        format!(
+            "No keys found in a private key file `{}`",
+            tls.key.display()
+        )
+    })?;
+
+    config
+        .with_single_cert(cert_chain, key)
+        .map_err(|e| format!("Invalid certificate/key pair: {e}"))
 }
