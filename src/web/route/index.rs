@@ -27,7 +27,7 @@ pub async fn get(
             (summary, players)
         }
         Err(err) => {
-            eprintln!("Failed to get the list of players: {err}");
+            tracing::error!("Failed to get the list of players: {err}");
 
             flash_messages.error("Failed to communicate with the Minecraft server.");
 
@@ -41,7 +41,7 @@ pub async fn get(
     let tick_stats = match client.query_tick().await {
         Ok(stats) => Some(stats),
         Err(err) => {
-            eprintln!("Failed to query tick stats from the server: {err}");
+            tracing::error!("Failed to query tick stats from the server: {err}");
 
             flash_messages.error("Failed to fetch tick stats from the Minecraft server.");
 

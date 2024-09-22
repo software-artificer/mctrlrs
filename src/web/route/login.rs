@@ -25,7 +25,7 @@ pub async fn get(
             template::render_response(&templates, "login", &data)
         }
         Err(err) => {
-            eprintln!("Failed to render the login page: {err}");
+            tracing::error!("Failed to render the login page: {err}");
 
             Err(core_web::internal_server_error())
         }
@@ -79,7 +79,7 @@ fn bad_credentials(flash_messages: &session::FlashMessages) -> actix_web::HttpRe
 }
 
 fn internal_server_error(log: impl fmt::Display) -> actix_web::Error {
-    eprintln!("{log}");
+    tracing::error!("{log}");
 
     core_web::internal_server_error().into()
 }

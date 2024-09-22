@@ -83,7 +83,7 @@ impl actix_web::FromRequest for UserSession {
                 future::ready(Ok(UserSession { users, session }))
             }
             Err(err) => {
-                eprintln!("Unable to load users: {err}");
+                tracing::error!("Unable to load users: {err}");
 
                 future::ready(Err(web::internal_server_error().into()))
             }

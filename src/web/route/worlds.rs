@@ -66,7 +66,7 @@ pub async fn get(
             template::render_response(&templates, "worlds", &content)
         }
         Err(err) => {
-            eprintln!("Failed to load worlds: {err}");
+            tracing::error!("Failed to load worlds: {err}");
 
             Err(web::internal_server_error())
         }
@@ -87,13 +87,13 @@ pub async fn post(
     match core::Worlds::new(&config.worlds_path, &config.server_properties_path) {
         Ok(worlds) => {
             if let Err(err) = client.save_all().await {
-                eprintln!("{err}");
+                tracing::error!("{err}");
 
                 flash_messages.error("Failed to save the current world.");
 
                 Ok(web::redirect("/worlds"))
             } else if let Err(err) = client.stop().await {
-                eprintln!("{err}");
+                tracing::error!("{err}");
 
                 flash_messages.error("Failed to stop the Minecraft server.");
 
@@ -119,7 +119,7 @@ pub async fn post(
                         Ok(web::redirect("/worlds"))
                     }
                     Err(err) => {
-                        eprintln!("Failed to switch the world: {err}");
+                        tracing::error!("Failed to switch the world: {err}");
 
                         Err(web::internal_server_error())
                     }
@@ -127,7 +127,7 @@ pub async fn post(
             }
         }
         Err(err) => {
-            eprintln!("Failed to load worlds: {err}");
+            tracing::error!("Failed to load worlds: {err}");
 
             Err(web::internal_server_error())
         }

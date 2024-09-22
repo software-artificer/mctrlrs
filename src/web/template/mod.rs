@@ -60,7 +60,7 @@ pub fn render_template<N: AsRef<str>, C: serde::Serialize>(
     match templates.render(name.as_ref(), data) {
         Ok(content) => Ok(content),
         Err(err) => {
-            eprintln!("Failed to render Handlebar template: {err}");
+            tracing::error!("Failed to render Handlebar template: {err}");
 
             Err(web::internal_server_error())
         }

@@ -53,7 +53,7 @@ pub async fn get(
             TokenState::Error => Err(core_web::internal_server_error()),
         },
         Err(err) => {
-            eprintln!("Failed to fetch session state: {err}");
+            tracing::error!("Failed to fetch session state: {err}");
 
             Err(core_web::internal_server_error())
         }
@@ -72,7 +72,7 @@ fn validate_token(config: &core::AppConfig, token: &str) -> TokenState {
                 }
             }
             Err(err) => {
-                eprintln!("Failed to load users to verify enroll token: {err}");
+                tracing::error!("Failed to load users to verify enroll token: {err}");
 
                 TokenState::Error
             }
@@ -106,14 +106,14 @@ pub async fn post(
                 Ok(core_web::redirect("/login"))
             }
             EnrollResult::Other(reason) => {
-                eprintln!("Failed to enroll the user: {reason}");
+                tracing::error!("Failed to enroll the user: {reason}");
 
                 Err(internal_server_error())
             }
         },
         Err(err) => match err {
             PasswordError::HashFailed(error) => {
-                eprintln!("Failed to hash the password: {}", error);
+                tracing::error!("Failed to hash the password: {error}");
 
                 Err(internal_server_error())
             }

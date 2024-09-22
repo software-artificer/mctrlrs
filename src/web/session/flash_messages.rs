@@ -46,7 +46,7 @@ impl FlashMessages {
     pub fn take(&self) -> Vec<FlashMessage> {
         match self.0.remove_as(Self::FLASH_MESSAGES_KEY) {
             Some(Err(err)) => {
-                eprintln!("Failed to fetch flash messages from session: {err}");
+                tracing::error!("Failed to fetch flash messages from session: {err}");
 
                 vec![]
             }
@@ -67,14 +67,14 @@ impl FlashMessages {
                 vec![flash_message]
             }
             Err(err) => {
-                eprintln!("Failed to load flash messages from session: {err}");
+                tracing::error!("Failed to load flash messages from session: {err}");
 
                 return;
             }
         };
 
         if let Err(err) = self.0.insert(Self::FLASH_MESSAGES_KEY, flash_messages) {
-            eprintln!("Failed to save flash messages into session: {err}");
+            tracing::error!("Failed to save flash messages into session: {err}");
         }
     }
 }

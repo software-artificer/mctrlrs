@@ -44,8 +44,6 @@ fn redirect<P: AsRef<str>>(path: P) -> actix_web::HttpResponse {
 }
 
 async fn run_server(config: core::Config) -> Result<(), Error> {
-    println!("Starting webserver on {}", config.listen_on);
-
     let mut templates = handlebars::Handlebars::new();
     templates.register_templates_directory(
         "./templates/",

@@ -63,6 +63,14 @@ enum World {
 }
 
 fn real_main(args: Args) -> anyhow::Result<()> {
+    tracing_subscriber::fmt()
+        .with_thread_names(true)
+        .with_line_number(true)
+        .with_level(true)
+        .with_max_level(tracing::Level::INFO)
+        .try_init()
+        .expect("Failed to configure the logger");
+
     let config =
         core::Config::load(args.config).with_context(|| "Failed to load configuration file")?;
 
@@ -90,7 +98,8 @@ fn main() {
     let args = Args::parse();
 
     if let Err(err) = real_main(args) {
-        eprintln!("{err:?}");
+        tracing::error!("{err}");
+
         std::process::exit(1);
     }
 }
