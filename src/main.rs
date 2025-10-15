@@ -98,7 +98,13 @@ fn main() {
     let args = Args::parse();
 
     if let Err(err) = real_main(args) {
-        tracing::error!("{err}");
+        tracing::error!(
+            "{}",
+            err.chain()
+                .map(|err| err.to_string())
+                .collect::<Vec<_>>()
+                .join(": ")
+        );
 
         std::process::exit(1);
     }
