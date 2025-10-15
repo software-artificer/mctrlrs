@@ -28,7 +28,7 @@ jobs:
     - uses: actions/upload-artifact@v4
       with:
         name: x86_64-linux
-        path: "target/x86_64-unknown-linux-gnu/release/mctrlrs-${{ github.ref_name }}-x86_64-linux.tar.bz2"
+        path: "mctrlrs-${{ github.ref_name }}-x86_64-linux.tar.bz2"
         if-no-files-found: error
         retention-days: 1
         compression-level: 0
@@ -39,7 +39,6 @@ jobs:
       contents: write
     needs:
     - build-linux
-    - build-macos
     steps:
     - uses: actions/download-artifact@v5
       with:

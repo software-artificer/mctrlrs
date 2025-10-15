@@ -1,4 +1,4 @@
-use actix_web::{body, dev, http, FromRequest};
+use actix_web::{FromRequest, body, dev, http};
 use std::{future, marker, pin, rc};
 
 pub trait AuthSession: FromRequest {
@@ -20,10 +20,10 @@ impl<A: AuthSession> AuthMiddleware<A> {
 impl<S, B, A> dev::Transform<S, dev::ServiceRequest> for AuthMiddleware<A>
 where
     S: dev::Service<
-        dev::ServiceRequest,
-        Response = dev::ServiceResponse<B>,
-        Error = actix_web::Error,
-    >,
+            dev::ServiceRequest,
+            Response = dev::ServiceResponse<B>,
+            Error = actix_web::Error,
+        >,
     S::Future: 'static,
     B: 'static,
     S: 'static,
