@@ -1,5 +1,4 @@
 use super::properties;
-use actix_web::http::uri;
 use std::{env, fs, io, net, num, path};
 
 #[derive(serde::Deserialize)]
@@ -7,8 +6,7 @@ struct ConfigFile {
     listen_on: net::SocketAddr,
     worlds_path: path::PathBuf,
     users_file_path: path::PathBuf,
-    #[serde(with = "http_serde::uri")]
-    base_url: uri::Uri,
+    base_url: url::Url,
     #[serde(default = "default_min_password_len")]
     min_password_length: u8,
     #[serde(default = "default_max_password_len")]
@@ -57,7 +55,7 @@ pub enum ConfigValidationError {
     #[error("Invalid users file path: {0}")]
     UsersFilePath(String),
     #[error("Invalid base URL: {0}")]
-    InvalidBaseUrl(uri::Uri),
+    InvalidBaseUrl(url::Url),
     #[error("Invalid server.properties path: {}", .0.display())]
     PropertiesPath(path::PathBuf),
     #[error("Unable to load server.properties file: {0}")]
@@ -70,7 +68,7 @@ pub struct AppConfig {
     pub worlds_path: path::PathBuf,
     pub rcon_address: net::SocketAddr,
     pub users_file_path: path::PathBuf,
-    pub base_url: uri::Uri,
+    pub base_url: url::Url,
     pub min_password_length: usize,
     pub max_password_length: usize,
     pub server_properties_path: path::PathBuf,
@@ -199,11 +197,11 @@ fn resolve_users_file_path(
     }
 }
 
-fn check_base_url(url: uri::Uri) -> Result<uri::Uri, ConfigValidationError> {
-    if url.scheme().is_none() {
-        Err(ConfigValidationError::InvalidBaseUrl(url))
-    } else {
+fn check_base_url(url: url::Url) -> Result<url::Url, ConfigValidationError> {
+    if url.scheme().starts_with("http") {
         Ok(url)
+    } else {
+        Err(ConfigValidationError::InvalidBaseUrl(url))
     }
 }
 

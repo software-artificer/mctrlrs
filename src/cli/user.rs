@@ -1,6 +1,4 @@
 use crate::core;
-use actix_web::http::uri;
-use std::str::FromStr;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -18,11 +16,9 @@ pub fn enroll(config: core::AppConfig, username: String) -> Result<(), Error> {
     let users = core::Users::load(config.users_file_path).map_err(Error::FailedToEnrol)?;
     let token = users.enroll_user(username).map_err(Error::FailedToEnrol)?;
 
-    let mut parts = config.base_url.into_parts();
-    let path_and_query = uri::PathAndQuery::from_str(&format!("/enroll?token={}", token.reveal()))
-        .expect("Failed to create the path and query part for an enrollment URL.");
-    parts.path_and_query = Some(path_and_query);
-    let url: uri::Uri = uri::Uri::from_parts(parts).expect("Failed to generate an enrollment URL.");
+    let mut url = config.base_url;
+    url.set_path("/enroll");
+    url.set_query(Some(&format!("token={}", token.reveal())));
 
     println!("To finish the enrollment visit {}", url);
 
