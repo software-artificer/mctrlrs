@@ -50,12 +50,12 @@ pub async fn get(
                 flash_messages.error("Provided enroll token is invalid.");
                 Ok(core_web::redirect("/login"))
             }
-            TokenState::Error => Err(core_web::internal_server_error()),
+            TokenState::Error => Err(core_web::internal_server_error().into()),
         },
         Err(err) => {
             tracing::error!("Failed to fetch session state: {err}");
 
-            Err(core_web::internal_server_error())
+            Err(core_web::internal_server_error().into())
         }
     }
 }

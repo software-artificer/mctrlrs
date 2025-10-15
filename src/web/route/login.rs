@@ -27,7 +27,7 @@ pub async fn get(
         Err(err) => {
             tracing::error!("Failed to render the login page: {err}");
 
-            Err(core_web::internal_server_error())
+            Err(core_web::internal_server_error().into())
         }
     }
 }

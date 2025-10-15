@@ -68,7 +68,7 @@ pub async fn get(
         Err(err) => {
             tracing::error!("Failed to load worlds: {err}");
 
-            Err(web::internal_server_error())
+            Err(web::internal_server_error().into())
         }
     }
 }

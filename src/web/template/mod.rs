@@ -56,13 +56,13 @@ pub fn render_template<N: AsRef<str>, C: serde::Serialize>(
     templates: &handlebars::Handlebars,
     name: N,
     data: &Content<C>,
-) -> Result<String, error::InternalError<&'static str>> {
+) -> Result<String, error::Error> {
     match templates.render(name.as_ref(), data) {
         Ok(content) => Ok(content),
         Err(err) => {
             tracing::error!("Failed to render Handlebar template: {err}");
 
-            Err(web::internal_server_error())
+            Err(web::internal_server_error().into())
         }
     }
 }
@@ -71,7 +71,7 @@ pub fn render_response<N: AsRef<str>, C: serde::Serialize>(
     templates: &handlebars::Handlebars,
     name: N,
     data: &Content<C>,
-) -> Result<actix_web::HttpResponse, error::InternalError<&'static str>> {
+) -> Result<actix_web::HttpResponse, error::Error> {
     render_template(templates, name, data).map(|content| {
         actix_web::HttpResponse::Ok()
             .content_type(header::ContentType::html())
