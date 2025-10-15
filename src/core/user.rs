@@ -1,7 +1,7 @@
 use crate::core;
 use argon2::{
-    password_hash::{self, rand_core::OsRng, PasswordHasher, SaltString},
     PasswordVerifier,
+    password_hash::{self, PasswordHasher, SaltString, rand_core::OsRng},
 };
 use rand::distr::{self, SampleString};
 use secrecy::ExposeSecret;
