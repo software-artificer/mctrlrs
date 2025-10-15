@@ -62,7 +62,7 @@ impl Properties {
             .parse()
             .map_err(|_| Error::InvalidRconPort)?;
 
-        let password = secrecy::SecretString::new(
+        let password = secrecy::SecretString::from(
             self.inner
                 .get(Self::RCON_PASSWORD_KEY)
                 .ok_or(Error::MissingRconPassword)?

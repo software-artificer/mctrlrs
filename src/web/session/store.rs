@@ -1,6 +1,6 @@
 use actix::{Actor, AsyncContext};
 use actix_session::storage;
-use rand::distributions::{self, DistString};
+use rand::distr::{self, SampleString};
 use std::{collections, time};
 
 type SessionState = collections::HashMap<String, String>;
@@ -115,8 +115,8 @@ impl actix::Handler<SaveMessage> for SessionActor {
     type Result = <SaveMessage as actix::Message>::Result;
 
     fn handle(&mut self, msg: SaveMessage, _: &mut Self::Context) -> Self::Result {
-        let mut rng = rand::thread_rng();
-        let key = distributions::Alphanumeric.sample_string(&mut rng, 32);
+        let mut rng = rand::rng();
+        let key = distr::Alphanumeric.sample_string(&mut rng, 32);
 
         self.0
             .insert(key.clone(), SessionEntry::new(msg.ttl, msg.state));

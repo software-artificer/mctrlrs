@@ -34,14 +34,14 @@ pub enum LoadConfigError {
     #[error("Failed to obtain absolute path for the binary")]
     ExecutablePath(#[source] io::Error),
     #[error("Failed to parse configuration file")]
-    ParseFailure(#[from] serde_yml::Error),
+    ParseFailure(#[from] serde_yaml_ng::Error),
     #[error("Failed to read configuration file contents {}", .path.display())]
     ReadError {
         path: path::PathBuf,
         #[source]
         source: io::Error,
     },
-    #[error("Failed to canonicalize the path {path}: {source}")]
+    #[error("Failed to canonicalize the path {}: {source}", .path.display())]
     CanonicalizePath {
         path: path::PathBuf,
         source: io::Error,
@@ -95,7 +95,7 @@ impl Config {
         let config_reader =
             fs::File::open(&path).map_err(|source| LoadConfigError::ReadError { path, source })?;
         let config: ConfigFile =
-            serde_yml::from_reader(config_reader).map_err(LoadConfigError::ParseFailure)?;
+            serde_yaml_ng::from_reader(config_reader).map_err(LoadConfigError::ParseFailure)?;
 
         config.try_into().map_err(LoadConfigError::Validate)
     }

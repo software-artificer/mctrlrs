@@ -72,7 +72,7 @@ impl RconClient<Connected> {
         mut self,
         password: secrecy::SecretString,
     ) -> Result<RconClient<Authenticated>, RconError> {
-        let request = RconPacket::authentication(0, password.expose_secret().clone())?;
+        let request = RconPacket::authentication(0, password.expose_secret().to_string())?;
 
         self.state
             .0

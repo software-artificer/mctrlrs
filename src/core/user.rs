@@ -3,7 +3,7 @@ use argon2::{
     password_hash::{self, rand_core::OsRng, PasswordHasher, SaltString},
     PasswordVerifier,
 };
-use rand::distributions::{self, DistString};
+use rand::distr::{self, SampleString};
 use secrecy::ExposeSecret;
 use std::{collections, fmt, fs, io, path};
 
@@ -83,7 +83,7 @@ impl TryFrom<String> for EnrollToken {
 
     fn try_from(token: String) -> Result<Self, Self::Error> {
         if token.is_safe() || token.len() != Self::TOKEN_LENGTH {
-            Ok(Self(secrecy::Secret::new(token)))
+            Ok(Self(secrecy::SecretString::from(token)))
         } else {
             Err(InvalidTokenError)
         }
@@ -153,7 +153,7 @@ impl Users {
 
         let users_file = fs::File::open(&storage_path).map_err(ManageUsersError::LoadStorage)?;
         let users: Vec<UserRecord> =
-            serde_yml::from_reader(users_file).map_err(ManageUsersError::Deserialize)?;
+            serde_yaml_ng::from_reader(users_file).map_err(ManageUsersError::Deserialize)?;
         let users = parse_users(users)?;
 
         Ok(Self {
@@ -165,9 +165,9 @@ impl Users {
     pub fn enroll_user(mut self, username: Username) -> Result<EnrollToken, ManageUsersError> {
         let password = None;
         let enroll_token: EnrollToken = {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             let token_string =
-                distributions::Alphanumeric.sample_string(&mut rng, EnrollToken::TOKEN_LENGTH);
+                distr::Alphanumeric.sample_string(&mut rng, EnrollToken::TOKEN_LENGTH);
             token_string
                 .try_into()
                 .map_err(ManageUsersError::GenerateToken)?
@@ -229,7 +229,7 @@ impl Users {
         let storage_file = fs::File::create(&self.storage_path)
             .map_err(|err| ManageUsersError::Persist(err.to_string()))?;
         let user_records: Vec<UserRecord> = self.into();
-        serde_yml::to_writer(storage_file, &user_records)
+        serde_yaml_ng::to_writer(storage_file, &user_records)
             .map_err(|err| ManageUsersError::Persist(err.to_string()))?;
 
         Ok(())
@@ -269,7 +269,7 @@ impl TryFrom<UserRecord> for User {
 
             Ok(Self {
                 username,
-                password: user_record.password.map(secrecy::Secret::new),
+                password: user_record.password.map(secrecy::SecretString::from),
                 enroll_token,
             })
         }
@@ -283,10 +283,10 @@ impl From<Users> for Vec<UserRecord> {
             .into_values()
             .map(|user| UserRecord {
                 username: user.username.to_string(),
-                password: user.password.map(|pass| pass.expose_secret().clone()),
+                password: user.password.map(|pass| pass.expose_secret().to_string()),
                 enroll_token: user
                     .enroll_token
-                    .map(|token| token.0.expose_secret().clone()),
+                    .map(|token| token.0.expose_secret().to_string()),
             })
             .collect()
     }
@@ -312,7 +312,7 @@ pub enum ManageUsersError {
     #[error("Storage corruption detected: {}", .0)]
     CorruptStorage(String),
     #[error("Failed to deserialize storage data: {}", .0)]
-    Deserialize(#[source] serde_yml::Error),
+    Deserialize(#[source] serde_yaml_ng::Error),
     #[error("Failed to generate enroll token: {}", .0)]
     GenerateToken(#[from] InvalidTokenError),
     #[error("Failed to persist users data: {}", .0)]
@@ -349,7 +349,7 @@ impl Password {
                 .hash_password(pass.as_bytes(), &salt)
                 .map_err(PasswordError::Hash)?;
 
-            Ok(Self(secrecy::Secret::new(password_hash.to_string())))
+            Ok(Self(secrecy::SecretString::from(password_hash.to_string())))
         }
     }
 }
