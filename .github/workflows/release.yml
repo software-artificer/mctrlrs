@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags:
+    - 'v*'
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: stable
+    - name: Run the release build
+      run: cargo build --release --target=x86_64-unknown-linux-gnu
+      env:
+        RUSTFLAGS: -C target-feature=+crt-static
+    - name: Copy the resulting binary into the project root
+      run: cp -v target/x86_64-unknown-linux-gnu/release/mctrlrs mctrlrs
+    - name: Create the release archive
+      run: |
+        tar -cvjf "mctrlrs-${{ github.ref_name }}-x86_64-linux.tar.bz2" \
+          mctrlrs static/ templates/ config.yml
+      env:
+        BZIP: --best
+    - uses: actions/upload-artifact@v4
+      with:
+        name: x86_64-linux
+        path: "target/x86_64-unknown-linux-gnu/release/mctrlrs-${{ github.ref_name }}-x86_64-linux.tar.bz2"
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 0
+
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    needs:
+    - build-linux
+    - build-macos
+    steps:
+    - uses: actions/download-artifact@v5
+      with:
+        name: x86_64-linux
+    - name: Create a GitHub release
+      run: |
+        gh release create ${{ github.ref_name }} --draft --generate-notes \
+          --prerelease --title "Release ${{ github.ref_name }} draft" \
+          --repo "${{ github.repository }}" \
+          "mctrlrs-${{ github.ref_name }}-x86_64-linux.tar.bz2"
+      env:
+        GH_TOKEN: ${{ github.token }}
+
