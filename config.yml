@@ -1,9 +1,10 @@
 ---
 listen_on: 127.0.0.1:9753
-worlds_path: /var/lib/minecraft/worlds
+worlds_path: /tmp/nix-shell.Bihv8S/tmp.YDoMbAsiBf
 current_world_name: current_world
 server_socket_path: /run/minecraft/minecraft.socket
-users_file_path: /var/lib/minecraft/users.yml
+users_file_path: ./users.yaml
 base_url: http://127.0.0.1:9753/
 min_password_length: 10
 max_password_length: 128
+server_properties_path: ./server.properties
