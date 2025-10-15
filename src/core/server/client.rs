@@ -69,10 +69,11 @@ impl Client {
             run_command(&self.0, actor::Command::Other("tick query".to_string())).await?;
 
         // Example server output:
-        // Target tick rate: 20.0 per second.
-        // Average time per tick: 13.2ms (Target: 50.0ms)
-        // Percentiles: P50: 13.0ms P95: 16.0ms P99: 18.6ms, sample: 100
-        let tick_stats_stripped = tick_stats.replace([':', ',', '(', ')'], " ");
+        // > The game is running normally
+        // > Target tick rate: 20.0 per second.
+        // > Average time per tick: 0.0ms (Target: 50.0ms)
+        // > Percentiles: P50: 0.0ms P95: 0.0ms P99: 0.1ms. Sample: 100
+        let tick_stats_stripped = tick_stats.replace([':', ',', '(', ')', '.'], " ");
         let timings: Vec<_> = tick_stats_stripped
             .split_whitespace()
             .filter(|w| w.ends_with("ms"))
