@@ -1,10 +1,37 @@
 ---
+# The host:port pair for the server to listen on. Required.
 listen_on: 127.0.0.1:9753
+# Path to the directory that contains minecraft worlds. Required.
 worlds_path: /var/lib/minecraft/worlds
-current_world_name: current_world
-server_socket_path: /run/minecraft/minecraft.socket
+# A path to the YAML file that contains users database. Required.
+# Note: This file must be writeable for the program to work properly.
 users_file_path: /var/lib/minecraft/users.yml
+# The base public URL for the web server. Required.
+# This is required to generate enrollment links.
 base_url: http://127.0.0.1:9753/
+# A minimum password length that the user can create when enrolling into the
+# system. Optional. Default is 10.
 min_password_length: 10
+# A maximum password lenght that the user can create when enrolling into the
+# system. Optional. Default is 128.
 max_password_length: 128
+# A master key that is used to derive a signing key for cookies. Optional.
+# By default a new key will be generated when the server starts. Note, that
+# omitting this key will mean all existing cookies will be invaidated after a
+# server restart.
 cookie_key: NKZW9j1Q7ABNv01xF5NSI3gmyKDaTrVb
+# A path to the `server.properties` file from the Minecraft server. Required.
+# This is used to obtain information about the RCON socket location and 
+# credentials used to connect. Required.
+server_properties_path: path::PathBuf,
+# A path to the private key for the TLS certificate to use for serving the web
+# interface using HTTPS protocol. Optional. Must be specified if the
+# `tls_chain` value is set.
+tls_key: Option<path::PathBuf>,
+# A path to the certificate chain for the TLS certificate to use for serving
+# the web interface using the HTTPS protocol. Optional. Must be specified if
+# the `tls_key` value is set.
+tls_chain: Option<path::PathBuf>,
+# A number of web workers to run. Optional. By default use a single worker per
+# core available on the system.
+worker_count: Option<num::NonZeroUsize>,
