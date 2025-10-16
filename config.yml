@@ -7,3 +7,4 @@ users_file_path: /var/lib/minecraft/users.yml
 base_url: http://127.0.0.1:9753/
 min_password_length: 10
 max_password_length: 128
+cookie_key: NKZW9j1Q7ABNv01xF5NSI3gmyKDaTrVb

@@ -24,6 +24,8 @@ pub enum Error {
     Actix(#[from] std::io::Error),
     #[error("Failed to configure TLS: {0}")]
     Tls(String),
+    #[error("Failed to generate the cookie signing key")]
+    CookieKey,
 }
 
 pub fn start_server(config: core::Config) -> Result<(), Error> {
@@ -50,7 +52,7 @@ async fn run_server(config: core::Config) -> Result<(), Error> {
         handlebars::DirectorySourceOptions::default(),
     )?;
     let templates = web::Data::new(templates);
-    let secret_key = cookie::Key::generate();
+    let secret_key = config.cookie_key().ok_or(Error::CookieKey)?;
     let session_store = session::SessionStore::default();
     let app_config = web::Data::new(config.app_config);
     let client = web::Data::new(server::Client::new(

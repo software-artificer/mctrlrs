@@ -1,4 +1,6 @@
 use super::properties;
+use actix_web::cookie;
+use secrecy::ExposeSecret;
 use std::{env, fs, io, net, num, path};
 
 #[derive(serde::Deserialize)]
@@ -15,6 +17,7 @@ struct ConfigFile {
     tls_key: Option<path::PathBuf>,
     tls_chain: Option<path::PathBuf>,
     worker_count: Option<num::NonZeroUsize>,
+    cookie_key: Option<secrecy::SecretString>,
 }
 
 fn default_min_password_len() -> u8 {
@@ -39,12 +42,12 @@ pub enum LoadConfigError {
         #[source]
         source: io::Error,
     },
-    #[error("Failed to canonicalize the path {}: {source}", .path.display())]
+    #[error("Failed to canonicalize the path {}", .path.display())]
     CanonicalizePath {
         path: path::PathBuf,
         source: io::Error,
     },
-    #[error("Failed to validate configuration file: {0}")]
+    #[error("Failed to validate configuration file")]
     Validate(#[from] ConfigValidationError),
 }
 
@@ -58,10 +61,12 @@ pub enum ConfigValidationError {
     InvalidBaseUrl(url::Url),
     #[error("Invalid server.properties path: {}", .0.display())]
     PropertiesPath(path::PathBuf),
-    #[error("Unable to load server.properties file: {0}")]
+    #[error("Unable to load server.properties file")]
     LoadProperties(#[source] properties::Error),
     #[error("Invalid TLS configuration: {0}")]
     Tls(String),
+    #[error("Cookie key must be at least 32 bytes long, got: {0}")]
+    CookieKey(usize),
 }
 
 pub struct AppConfig {
@@ -85,6 +90,17 @@ pub struct Config {
     pub app_config: AppConfig,
     pub tls: Option<TlsConfig>,
     pub worker_count: Option<num::NonZeroUsize>,
+    pub cookie_key: Option<secrecy::SecretBox<str>>,
+}
+
+impl Config {
+    pub fn cookie_key(&self) -> Option<cookie::Key> {
+        if let Some(key) = &self.cookie_key {
+            Some(cookie::Key::derive_from(key.expose_secret().as_bytes()))
+        } else {
+            cookie::Key::try_generate()
+        }
+    }
 }
 
 impl Config {
@@ -112,6 +128,7 @@ impl TryFrom<ConfigFile> for Config {
             resolve_server_properties_file_path(config.server_properties_path)?;
         let rcon_properties = load_server_properties(&server_properties_path)?;
         let tls = resolve_tls_config(config.tls_key, config.tls_chain)?;
+        let cookie_key = check_cookie_key(config.cookie_key)?;
 
         Ok(Self {
             listen_on: config.listen_on,
@@ -130,6 +147,7 @@ impl TryFrom<ConfigFile> for Config {
                 rcon_password: rcon_properties.password,
             },
             worker_count: config.worker_count,
+            cookie_key,
         })
     }
 }
@@ -227,4 +245,20 @@ fn relative_path_to_absolute<P: AsRef<path::Path>>(
             .with_file_name(path)
     };
     Ok(path)
+}
+
+fn check_cookie_key(
+    key: Option<secrecy::SecretString>,
+) -> Result<Option<secrecy::SecretString>, ConfigValidationError> {
+    if let Some(key) = key {
+        let key_len = key.expose_secret().len();
+
+        if key_len < 32 {
+            Err(ConfigValidationError::CookieKey(key_len))
+        } else {
+            Ok(Some(key))
+        }
+    } else {
+        Ok(None)
+    }
 }
