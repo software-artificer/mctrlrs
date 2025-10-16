@@ -11,10 +11,11 @@ use std::path;
 struct Args {
     #[command(subcommand)]
     cmd: Commands,
-    #[arg(short, long, default_value = "mctrlrs.toml")]
+    #[arg(short, long, default_value = "mctrlrs.yaml")]
     /// Path to the YAML configuration file. If absolute path is provided it will be used as is.
     /// The relative path starting from "./" or "../" will be resolved using current working
-    /// directory as a base path. The relative path that starts from something other than "./" or "../" will be resolved against the binary location.
+    /// directory as a base path. The relative path that starts from something other than
+    /// "./" or "../" will be resolved against the binary location.
     config: path::PathBuf,
 }
 
