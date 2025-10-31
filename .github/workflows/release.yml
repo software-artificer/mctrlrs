@@ -25,7 +25,7 @@ jobs:
           mctrlrs static/ templates/ config.yml
       env:
         BZIP: --best
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v5
       with:
         name: x86_64-linux
         path: "mctrlrs-${{ github.ref_name }}-x86_64-linux.tar.bz2"
