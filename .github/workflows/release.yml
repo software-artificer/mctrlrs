@@ -40,7 +40,7 @@ jobs:
     needs:
     - build-linux
     steps:
-    - uses: actions/download-artifact@v5
+    - uses: actions/download-artifact@v6
       with:
         name: x86_64-linux
     - name: Create a GitHub release
