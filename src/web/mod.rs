@@ -10,6 +10,8 @@ use actix_web::{
     error, http, web,
 };
 use std::{fs, io, net};
+use tokio::signal::unix;
+use tokio_util::sync;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -21,15 +23,76 @@ pub enum Error {
     #[error("Failed to load handlebars template")]
     Template(#[from] handlebars::TemplateError),
     #[error("Actix web server failed: {0}")]
-    Actix(#[from] std::io::Error),
+    Actix(#[from] io::Error),
     #[error("Failed to configure TLS: {0}")]
     Tls(String),
     #[error("Failed to generate the cookie signing key")]
     CookieKey,
+    #[error("Failed to set-up signal handler for {}: {}", 1.to_string(), 0)]
+    SignalHandler(io::Error, unix::SignalKind),
+}
+
+fn run_signal_handler(
+    signal_token: sync::CancellationToken,
+) -> Result<tokio::task::JoinHandle<()>, Error> {
+    fn signal_handler(sig: unix::SignalKind) -> Result<unix::Signal, Error> {
+        unix::signal(sig).map_err(|e| Error::SignalHandler(e, sig))
+    }
+
+    let mut sigint = signal_handler(unix::SignalKind::interrupt())?;
+    let mut sigterm = signal_handler(unix::SignalKind::terminate())?;
+    let mut sigquit = signal_handler(unix::SignalKind::quit())?;
+
+    Ok(tokio::spawn(async move {
+        let _guard = signal_token.drop_guard_ref();
+
+        match tokio::select! {
+            _ = sigint.recv() => Ok("SIGINT"),
+            _ = sigterm.recv() => Ok("SIGTERM"),
+            _ = sigquit.recv() => Ok("SIGQUIT"),
+            _ = signal_token.cancelled() => Err(()),
+        } {
+            Ok(sig) => tracing::info!("Received {sig} signal, initiating shutdown"),
+            Err(_) => tracing::error!("Signal handler cancelled, an essential task exited"),
+        }
+    }))
 }
 
 pub fn start_server(config: core::Config) -> Result<(), Error> {
-    actix_web::rt::System::new().block_on(run_server(config))
+    // create a cancel token
+    // start a persistent session store task
+    // start an in-memory session store task
+    // start an RCON client task
+    // start a web server task
+    // ^ if any task from above fails token needs to be cancelled
+    // create a signal handler cancelling the token and block on it
+    // if signal is received or a token is cancelled:
+    // - either wait for each task to complete
+    // - or kill any unfinished tasks if timeout expires
+    // exit
+    actix_web::rt::System::new().block_on(async {
+        let root_token = tokio_util::sync::CancellationToken::new();
+        let _guard = root_token.drop_guard_ref();
+
+        let signal_task = run_signal_handler(root_token.clone())?;
+        let session_file_store =
+            session::FileStore::new(&config.session_store_path, root_token.clone());
+
+        let session_store = session::SessionStore::new(session_file_store, root_token.clone());
+
+        match run_server(config, session_store.clone(), root_token.clone()).await {
+            Err(err) => tracing::error!("The web server exited due to a failure: {err}"),
+            _ => tracing::info!("The web server has gracefully shutdown"),
+        }
+
+        if let Err(err) = signal_task.await {
+            tracing::error!("The signal handler task has crashed: {err}");
+        }
+
+        session_store.shutdown().await;
+
+        Ok(())
+    })
 }
 
 fn internal_server_error() -> error::InternalError<&'static str> {
@@ -45,7 +108,11 @@ fn redirect<P: AsRef<str>>(path: P) -> actix_web::HttpResponse {
         .finish()
 }
 
-async fn run_server(config: core::Config) -> Result<(), Error> {
+async fn run_server(
+    config: core::Config,
+    session_store: session::SessionStore,
+    cancel: sync::CancellationToken,
+) -> Result<(), Error> {
     let mut templates = handlebars::Handlebars::new();
     templates.register_templates_directory(
         "./templates/",
@@ -53,7 +120,6 @@ async fn run_server(config: core::Config) -> Result<(), Error> {
     )?;
     let templates = web::Data::new(templates);
     let secret_key = config.cookie_key().ok_or(Error::CookieKey)?;
-    let session_store = session::SessionStore::default();
     let app_config = web::Data::new(config.app_config);
     let client = web::Data::new(server::Client::new(
         app_config.rcon_address,
@@ -113,6 +179,8 @@ async fn run_server(config: core::Config) -> Result<(), Error> {
         socket: config.listen_on,
         source: err,
     })?;
+
+    let server = server.shutdown_signal(async move { cancel.cancelled().await });
 
     server.run().await?;
 

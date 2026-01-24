@@ -32,6 +32,11 @@ secrecy = { version = "0.10", features = ["serde"] }
 serde = { version = "1", default-features = false, features = ["serde_derive"] }
 serde_yaml_ng = { version = "0.10.0", default-features = false, features = [] }
 thiserror = { version = "2", default-features = false, features = [] }
+tokio = { version = "1.48.0", default-features = false, features = [
+	"macros",
+	"fs",
+] }
+tokio-util = { version = "0.7.16", default-features = false }
 tracing = { version = "0.1.44", features = ["log"] }
 tracing-subscriber = "0.3.23"
 url = { version = "2.5.8", default-features = false, features = ["serde"] }

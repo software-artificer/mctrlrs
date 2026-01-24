@@ -18,6 +18,7 @@ struct ConfigFile {
     tls_chain: Option<path::PathBuf>,
     worker_count: Option<num::NonZeroUsize>,
     cookie_key: Option<secrecy::SecretString>,
+    session_store_path: path::PathBuf,
 }
 
 fn default_min_password_len() -> u8 {
@@ -67,6 +68,8 @@ pub enum ConfigValidationError {
     Tls(String),
     #[error("Cookie key must be at least 32 bytes long, got: {0}")]
     CookieKey(usize),
+    #[error("Unable to resolve the session storage file path: {0}")]
+    SessionStorePath(String),
 }
 
 pub struct AppConfig {
@@ -91,6 +94,7 @@ pub struct Config {
     pub tls: Option<TlsConfig>,
     pub worker_count: Option<num::NonZeroUsize>,
     pub cookie_key: Option<secrecy::SecretBox<str>>,
+    pub session_store_path: path::PathBuf,
 }
 
 impl Config {
@@ -129,6 +133,7 @@ impl TryFrom<ConfigFile> for Config {
         let rcon_properties = load_server_properties(&server_properties_path)?;
         let tls = resolve_tls_config(config.tls_key, config.tls_chain)?;
         let cookie_key = check_cookie_key(config.cookie_key)?;
+        let session_store_path = resolve_session_store_path(config.session_store_path)?;
 
         Ok(Self {
             listen_on: config.listen_on,
@@ -148,8 +153,16 @@ impl TryFrom<ConfigFile> for Config {
             },
             worker_count: config.worker_count,
             cookie_key,
+            session_store_path,
         })
     }
+}
+
+fn resolve_session_store_path(
+    session_store_path: path::PathBuf,
+) -> Result<path::PathBuf, ConfigValidationError> {
+    relative_path_to_absolute(session_store_path)
+        .map_err(|err| ConfigValidationError::SessionStorePath(err.to_string()))
 }
 
 fn resolve_tls_config(
