@@ -1,7 +1,7 @@
 use std::{
     fmt,
     io::{self, Read, Write},
-    net,
+    net, num,
 };
 
 use secrecy::ExposeSecret;
@@ -28,6 +28,10 @@ pub enum RconError {
     InvalidPacketType(String, String),
     #[error("Failed to shutdown the TCP connection to the server: {0}")]
     Shutdown(#[source] io::Error),
+    #[error("Failed to convert the encoded packet size to usize: {0}")]
+    SizeError(#[source] num::TryFromIntError),
+    #[error("Unexpected end of packet")]
+    UnexpectedPackedEnd,
 }
 
 pub struct Disconnected;
@@ -76,7 +80,7 @@ impl RconClient<Connected> {
 
         self.state
             .0
-            .write_all(&request.encode())
+            .write_all(&request.encode()?)
             .map_err(RconError::Write)?;
 
         let size = read_size(&mut self.state.0)?;
@@ -108,7 +112,7 @@ impl RconClient<Authenticated> {
         self.state
             .inner
             .0
-            .write_all(&RconPacket::command(id, data)?.encode())
+            .write_all(&RconPacket::command(id, data)?.encode()?)
             .map_err(RconError::Write)?;
 
         let size = read_size(&mut self.state.inner.0)?;
@@ -146,10 +150,14 @@ impl RconClient<Authenticated> {
     }
 }
 
-fn read_size(stream: &mut net::TcpStream) -> Result<i32, RconError> {
+fn read_size(stream: &mut net::TcpStream) -> Result<usize, RconError> {
     let mut buf = [0; 4];
     stream.read_exact(&mut buf).map_err(RconError::Read)?;
-    let size = i32::from_le_bytes(buf);
+
+    let size = usize::try_from(i32::from_le_bytes(buf)).map_err(|err| {
+        RconError::Decode(format!("Failed to convert packet size to usize: {err}"))
+    })?;
+
     if !(RconPacket::MIN_PACKET_SIZE..=RconPacket::MAX_PACKET_SIZE).contains(&size) {
         Err(RconError::Decode(format!(
             "A packet size must be between {} and {} bytes long, server sent: {}",
@@ -162,8 +170,8 @@ fn read_size(stream: &mut net::TcpStream) -> Result<i32, RconError> {
     }
 }
 
-fn read_packet(stream: &mut net::TcpStream, size: i32) -> Result<RconPacket, RconError> {
-    let mut buf = vec![0; size as usize];
+fn read_packet(stream: &mut net::TcpStream, size: usize) -> Result<RconPacket, RconError> {
+    let mut buf = vec![0; size];
     stream.read_exact(&mut buf).map_err(RconError::Read)?;
 
     RconPacket::decode(buf)
@@ -176,7 +184,7 @@ fn read_fragmented(
     id: i32,
 ) -> Result<String, RconError> {
     stream
-        .write_all(&RconPacket::check(new_id)?.encode())
+        .write_all(&RconPacket::check(new_id)?.encode()?)
         .map_err(RconError::Write)?;
 
     loop {
@@ -258,9 +266,9 @@ struct RconPacket {
 }
 
 impl RconPacket {
-    const MIN_PACKET_SIZE: i32 = 10;
-    const MAX_PACKET_SIZE: i32 = 4106;
-    const PACKET_PAD_SIZE: i32 = 2;
+    const MIN_PACKET_SIZE: usize = 10;
+    const MAX_PACKET_SIZE: usize = 4106;
+    const PACKET_PAD_SIZE: usize = 2;
 
     const MAX_CLIENT_PAYLOAD_SIZE: usize = 1446;
 
@@ -293,58 +301,64 @@ impl RconPacket {
         }
     }
 
-    fn encode(self) -> Vec<u8> {
+    fn encode(self) -> Result<Vec<u8>, RconError> {
         let mut bytes = vec![];
         bytes.extend(self.id.to_le_bytes());
         bytes.extend(self.packet_type);
         bytes.extend(self.payload.as_bytes());
         bytes.extend([0, 0]);
 
-        let size = bytes.len() as i32;
+        let size = i32::try_from(bytes.len()).map_err(RconError::SizeError)?;
         let mut packet = vec![];
         packet.extend(size.to_le_bytes());
         packet.extend(bytes);
 
-        packet
+        Ok(packet)
     }
 
-    fn decode(mut bytes: Vec<u8>) -> Result<Self, RconError> {
-        if bytes.len() < Self::MIN_PACKET_SIZE as usize {
-            Err(RconError::Decode(format!(
+    fn decode(bytes: Vec<u8>) -> Result<Self, RconError> {
+        if bytes.len() < Self::MIN_PACKET_SIZE {
+            return Err(RconError::Decode(format!(
                 "Expected packet length to be at least {} bytes, got: {}",
                 Self::MIN_PACKET_SIZE,
                 bytes.len()
-            )))
-        } else {
-            let id: [u8; 4] = bytes.drain(0..4).as_slice().try_into().unwrap();
-            let id = i32::from_le_bytes(id);
-
-            let message_type: [u8; 4] = bytes.drain(0..4).as_slice().try_into().unwrap();
-            let message_type = i32::from_le_bytes(message_type).try_into()?;
-
-            let mut payload = String::new();
-
-            let payload_size = bytes.len() - Self::PACKET_PAD_SIZE as usize;
-            if payload_size > 0 {
-                payload =
-                    String::from_utf8(bytes.drain(0..payload_size).collect()).map_err(|e| {
-                        RconError::Decode(format!(
-                            "Failed to convert message body to a UTF-8 string: {e}"
-                        ))
-                    })?;
-            }
-
-            if bytes.drain(0..2).as_slice() != [0, 0] {
-                Err(RconError::Decode(
-                    "Missing padding at the end of the message".to_string(),
-                ))
-            } else {
-                Ok(Self {
-                    id,
-                    payload,
-                    packet_type: message_type,
-                })
-            }
+            )));
         }
+
+        let (id, bytes) = bytes
+            .split_first_chunk::<4>()
+            .ok_or(RconError::UnexpectedPackedEnd)?;
+
+        let id = i32::from_le_bytes(*id);
+
+        let (message_type, bytes) = bytes
+            .split_first_chunk::<4>()
+            .ok_or(RconError::UnexpectedPackedEnd)?;
+
+        let message_type = i32::from_le_bytes(*message_type).try_into()?;
+
+        let payload_size = bytes.len() - Self::PACKET_PAD_SIZE;
+
+        let payload = if payload_size > 0 {
+            str::from_utf8(&bytes[0..payload_size]).map_err(|e| {
+                RconError::Decode(format!(
+                    "Failed to convert message body to a UTF-8 string: {e}"
+                ))
+            })?
+        } else {
+            ""
+        };
+
+        if bytes[payload_size..payload_size + 2] != [0, 0] {
+            return Err(RconError::Decode(
+                "Missing padding at the end of the message".to_string(),
+            ));
+        }
+
+        Ok(Self {
+            id,
+            payload: payload.to_string(),
+            packet_type: message_type,
+        })
     }
 }
