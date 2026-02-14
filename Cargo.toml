@@ -21,7 +21,7 @@ clap = { version = "4", default-features = false, features = [
 	"usage",
 ] }
 handlebars = { version = "6", features = ["dir_source"] }
-rand = { version = "0.10", default-features = false, features = [] }
+rand = { version = "0.10", default-features = false, features = ["thread_rng"] }
 rustls = { version = "0.23.36", default-features = false, features = [
 	"logging",
 	"ring",
