@@ -22,7 +22,7 @@ clap = { version = "4", default-features = false, features = [
 ] }
 handlebars = { version = "6", features = ["dir_source"] }
 rand = { version = "0.10", default-features = false, features = ["thread_rng"] }
-rustls = { version = "0.23.36", default-features = false, features = [
+rustls = { version = "0.23.37", default-features = false, features = [
 	"logging",
 	"ring",
 	"std",
