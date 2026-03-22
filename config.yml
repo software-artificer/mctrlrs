@@ -23,15 +23,18 @@ cookie_key: NKZW9j1Q7ABNv01xF5NSI3gmyKDaTrVb
 # A path to the `server.properties` file from the Minecraft server. Required.
 # This is used to obtain information about the RCON socket location and 
 # credentials used to connect. Required.
-server_properties_path: path::PathBuf,
+server_properties_path: /opt/minecraft/server.properties
 # A path to the private key for the TLS certificate to use for serving the web
 # interface using HTTPS protocol. Optional. Must be specified if the
 # `tls_chain` value is set.
-tls_key: Option<path::PathBuf>,
+tls_key: /etc/ssl/private/mctrlrs.key
 # A path to the certificate chain for the TLS certificate to use for serving
 # the web interface using the HTTPS protocol. Optional. Must be specified if
 # the `tls_key` value is set.
-tls_chain: Option<path::PathBuf>,
+tls_chain: /etc/ssl/chain/mctrlrs.pem
 # A number of web workers to run. Optional. By default use a single worker per
 # core available on the system.
-worker_count: Option<num::NonZeroUsize>,
+worker_count: 4
+# A path to the file that will contain application session data. This is needed
+# to preserve the web sessions for users across server restarts.
+session_store_path: /var/lib/mctrlrs/session.yaml
