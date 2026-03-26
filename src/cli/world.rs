@@ -1,4 +1,5 @@
 use anyhow::Context;
+use tokio_util::sync;
 
 use crate::core::{self, server};
 
@@ -33,7 +34,11 @@ pub fn switch(config: core::AppConfig, world_name: String) -> Result<(), Error> 
         let worlds = core::Worlds::new(&config.worlds_path, &config.server_properties_path)
             .map_err(Error::LoadWorlds)?;
 
-        let client = server::Client::new(config.rcon_address, config.rcon_password);
+        let client = server::Client::new(
+            config.rcon_address,
+            config.rcon_password,
+            sync::CancellationToken::new(),
+        );
         client
             .save_all()
             .await

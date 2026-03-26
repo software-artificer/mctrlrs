@@ -1,6 +1,11 @@
 use super::{actor, rcon};
-use actix::Actor;
+use crate::core::server::actor::RconMessage;
 use std::net;
+use tokio::sync::{
+    mpsc::{self},
+    oneshot,
+};
+use tokio_util::sync;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -13,13 +18,15 @@ pub enum Error {
     #[error("Lost Minecraft server connection: {0}")]
     BrokenConnection(#[source] rcon::RconError),
     #[error("Failed to send a message to the actor: {0}")]
-    Actor(#[source] actix::MailboxError),
+    ActorSend(#[source] mpsc::error::SendError<RconMessage>),
+    #[error("Failed to fetch the response from the actor: {0}")]
+    ActorRecv(#[source] oneshot::error::RecvError),
     #[error("Failed to parse server tick stats: {0}")]
     TickStats(String),
 }
 
 #[derive(Clone)]
-pub struct Client(actix::Addr<actor::RconActor>);
+pub struct Client(mpsc::UnboundedSender<actor::RconMessage>);
 
 #[derive(serde::Serialize)]
 pub struct TickStats {
@@ -31,10 +38,14 @@ pub struct TickStats {
 }
 
 impl Client {
-    pub fn new(addr: net::SocketAddr, password: secrecy::SecretString) -> Self {
+    pub fn new(
+        addr: net::SocketAddr,
+        password: secrecy::SecretString,
+        cancel_token: sync::CancellationToken,
+    ) -> Self {
         let actor = actor::RconActor::new(addr, password);
 
-        Self(actor.start())
+        Self(actor.start(cancel_token))
     }
 
     pub async fn save_all(&self) -> Result<(), Error> {
@@ -94,13 +105,18 @@ impl Client {
 }
 
 async fn run_command(
-    actor: &actix::Addr<actor::RconActor>,
+    actor: &mpsc::UnboundedSender<RconMessage>,
     command: actor::Command,
 ) -> Result<String, Error> {
+    let (result, receiver) = oneshot::channel();
+
     actor
-        .send(command)
+        .send(RconMessage::new(result, command))
+        .map_err(Error::ActorSend)?;
+
+    receiver
         .await
-        .map_err(Error::Actor)?
+        .map_err(Error::ActorRecv)?
         .map_err(|e| match e {
             e @ rcon::RconError::Read(_) | e @ rcon::RconError::Write(_) => {
                 Error::BrokenConnection(e)

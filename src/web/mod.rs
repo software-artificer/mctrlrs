@@ -124,6 +124,7 @@ async fn run_server(
     let client = web::Data::new(server::Client::new(
         app_config.rcon_address,
         app_config.rcon_password.clone(),
+        cancel.clone(),
     ));
 
     let server = actix_web::HttpServer::new(move || {
