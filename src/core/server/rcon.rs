@@ -1,7 +1,7 @@
-use std::{
-    fmt,
-    io::{self, Read, Write},
-    net, num,
+use std::{fmt, io, num};
+use tokio::{
+    io::{AsyncReadExt as _, AsyncWriteExt as _},
+    net,
 };
 
 use secrecy::ExposeSecret;
@@ -39,10 +39,8 @@ pub struct Disconnected;
 pub struct Connected(net::TcpStream);
 
 impl Connected {
-    fn disconnect(self) -> Result<(), RconError> {
-        self.0
-            .shutdown(net::Shutdown::Both)
-            .map_err(RconError::Shutdown)
+    async fn disconnect(mut self) -> Result<(), RconError> {
+        self.0.shutdown().await.map_err(RconError::Shutdown)
     }
 }
 
@@ -62,8 +60,13 @@ impl RconClient<Disconnected> {
         }
     }
 
-    pub fn connect(self, addr: net::SocketAddr) -> Result<RconClient<Connected>, RconError> {
-        let stream = net::TcpStream::connect(addr).map_err(RconError::Connect)?;
+    pub async fn connect(
+        self,
+        addr: &std::net::SocketAddr,
+    ) -> Result<RconClient<Connected>, RconError> {
+        let stream = net::TcpStream::connect(addr)
+            .await
+            .map_err(RconError::Connect)?;
 
         Ok(RconClient {
             state: Connected(stream),
@@ -72,19 +75,20 @@ impl RconClient<Disconnected> {
 }
 
 impl RconClient<Connected> {
-    pub fn authenticate(
+    pub async fn authenticate(
         mut self,
-        password: secrecy::SecretString,
+        password: &secrecy::SecretString,
     ) -> Result<RconClient<Authenticated>, RconError> {
         let request = RconPacket::authentication(0, password.expose_secret().to_string())?;
 
         self.state
             .0
             .write_all(&request.encode()?)
+            .await
             .map_err(RconError::Write)?;
 
-        let size = read_size(&mut self.state.0)?;
-        let packet = read_packet(&mut self.state.0, size)?;
+        let size = read_size(&mut self.state.0).await?;
+        let packet = read_packet(&mut self.state.0, size).await?;
 
         if let RconPacketType::Command = packet.packet_type {
             match packet.id {
@@ -107,23 +111,24 @@ impl RconClient<Connected> {
 }
 
 impl RconClient<Authenticated> {
-    pub fn command(&mut self, data: String) -> Result<String, RconError> {
+    pub async fn command(&mut self, data: String) -> Result<String, RconError> {
         let id = self.id();
         self.state
             .inner
             .0
             .write_all(&RconPacket::command(id, data)?.encode()?)
+            .await
             .map_err(RconError::Write)?;
 
-        let size = read_size(&mut self.state.inner.0)?;
-        let packet = read_packet(&mut self.state.inner.0, size)?;
+        let size = read_size(&mut self.state.inner.0).await?;
+        let packet = read_packet(&mut self.state.inner.0, size).await?;
 
         if packet.id != id {
             Err(RconError::IdMismatch(0, packet.id))
         } else if let RconPacketType::Response = packet.packet_type {
             if size == RconPacket::MAX_PACKET_SIZE {
                 let new_id = self.id();
-                read_fragmented(&mut self.state.inner.0, packet.payload, new_id, id)
+                read_fragmented(&mut self.state.inner.0, packet.payload, new_id, id).await
             } else {
                 Ok(packet.payload)
             }
@@ -135,8 +140,8 @@ impl RconClient<Authenticated> {
         }
     }
 
-    pub fn disconnect(self) -> Result<(), RconError> {
-        self.state.inner.disconnect()
+    pub async fn disconnect(self) -> Result<(), RconError> {
+        self.state.inner.disconnect().await
     }
 
     fn id(&mut self) -> i32 {
@@ -150,9 +155,9 @@ impl RconClient<Authenticated> {
     }
 }
 
-fn read_size(stream: &mut net::TcpStream) -> Result<usize, RconError> {
+async fn read_size(stream: &mut net::TcpStream) -> Result<usize, RconError> {
     let mut buf = [0; 4];
-    stream.read_exact(&mut buf).map_err(RconError::Read)?;
+    stream.read_exact(&mut buf).await.map_err(RconError::Read)?;
 
     let size = usize::try_from(i32::from_le_bytes(buf)).map_err(|err| {
         RconError::Decode(format!("Failed to convert packet size to usize: {err}"))
@@ -170,14 +175,14 @@ fn read_size(stream: &mut net::TcpStream) -> Result<usize, RconError> {
     }
 }
 
-fn read_packet(stream: &mut net::TcpStream, size: usize) -> Result<RconPacket, RconError> {
+async fn read_packet(stream: &mut net::TcpStream, size: usize) -> Result<RconPacket, RconError> {
     let mut buf = vec![0; size];
-    stream.read_exact(&mut buf).map_err(RconError::Read)?;
+    stream.read_exact(&mut buf).await.map_err(RconError::Read)?;
 
     RconPacket::decode(buf)
 }
 
-fn read_fragmented(
+async fn read_fragmented(
     stream: &mut net::TcpStream,
     mut result: String,
     new_id: i32,
@@ -185,11 +190,12 @@ fn read_fragmented(
 ) -> Result<String, RconError> {
     stream
         .write_all(&RconPacket::check(new_id)?.encode()?)
+        .await
         .map_err(RconError::Write)?;
 
     loop {
-        let size = read_size(stream)?;
-        let packet = read_packet(stream, size)?;
+        let size = read_size(stream).await?;
+        let packet = read_packet(stream, size).await?;
 
         if packet.id == id {
             result.push_str(&packet.payload);
