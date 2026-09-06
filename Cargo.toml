@@ -12,7 +12,7 @@ actix-web = { version = "4", default-features = false, features = [
 	"rustls-0_23",
 ] }
 anyhow = "1.0"
-argon2 = { version = "0.5" }
+argon2 = { version = "0.6" }
 clap = { version = "4", default-features = false, features = [
 	"std",
 	"derive",
