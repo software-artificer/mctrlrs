@@ -1,7 +1,7 @@
 use crate::core;
 use argon2::{
     PasswordVerifier,
-    password_hash::{self, PasswordHasher, SaltString, rand_core::OsRng},
+    password_hash::{self, PasswordHasher, phc},
 };
 use rand::distr::{self, SampleString};
 use secrecy::ExposeSecret;
@@ -116,7 +116,7 @@ pub struct User {
 }
 
 pub enum PasswordVerifyResult {
-    Error(password_hash::Error),
+    Error(phc::Error),
     Valid,
     Invalid,
 }
@@ -343,10 +343,9 @@ impl Password {
         } else if !is_strong_password(pass) {
             Err(PasswordError::Weak)
         } else {
-            let salt = SaltString::generate(&mut OsRng);
             let argon2 = argon2::Argon2::default();
             let password_hash = argon2
-                .hash_password(pass.as_bytes(), &salt)
+                .hash_password(pass.as_bytes())
                 .map_err(PasswordError::Hash)?;
 
             Ok(Self(secrecy::SecretString::from(password_hash.to_string())))
